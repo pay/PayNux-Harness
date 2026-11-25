@@ -187,6 +187,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -281,11 +282,16 @@ import com.jarves.mh.ui.theme.AppLanguage
 import com.jarves.mh.ui.theme.AppThemeMode
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material3.ExtendedFloatingActionButton
+
+private val TerminalDraftHistorySaver = listSaver<List<String>, String>(
+    save = { it },
+    restore = { it },
+)
 
 private enum class RootScreen(@StringRes val labelRes: Int, val icon: ImageVector) {
     PROJECTS(R.string.tab_projects, Icons.Default.Folder),
     AGENT(R.string.tab_agent, Icons.Default.SmartToy),
+    TERMINAL(R.string.tab_terminal, Icons.Default.Terminal),
     SETTINGS(R.string.tab_settings, Icons.Default.Settings),
 }
 private enum class WorkspaceTab(@StringRes val labelRes: Int, val icon: ImageVector) {
@@ -2473,8 +2479,10 @@ private fun RootScreenHost(
     projectsListState: LazyListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() },
 ) {
     var screen by rememberSaveable { mutableStateOf(RootScreen.PROJECTS) }
-    var showQuickTerminal by rememberSaveable { mutableStateOf(false) }
     var openBackup by rememberSaveable { mutableStateOf(false) }
+    var terminalDraftInput by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue()) }
+    var terminalDraftHistory by rememberSaveable(stateSaver = TerminalDraftHistorySaver) { mutableStateOf(emptyList<String>()) }
+    var terminalDraftHistoryIndex by rememberSaveable { mutableIntStateOf(-1) }
 
     if (state.showWhatsNew) {
         WhatsNewDialog(
@@ -2513,17 +2521,6 @@ private fun RootScreenHost(
                         ),
                     )
                 }
-            }
-        },
-        floatingActionButton = {
-            if (screen == RootScreen.PROJECTS && !keyboardVisible && !showQuickTerminal) {
-                ExtendedFloatingActionButton(
-                    onClick = { showQuickTerminal = true },
-                    icon = { Icon(Icons.Default.Terminal, contentDescription = null) },
-                    text = { Text(stringResource(R.string.projects_terminal), fontWeight = FontWeight.SemiBold) },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                )
             }
         },
     ) { padding ->
@@ -2574,6 +2571,31 @@ private fun RootScreenHost(
                     onSetAntigravityModel = viewModel::setAntigravityModel,
                     onSetAntigravityEffort = viewModel::setAntigravityEffort,
                 )
+                RootScreen.TERMINAL -> TerminalScreen(
+                    lines = terminalLines,
+                    isRunning = isTerminalRunning,
+                    onRun = viewModel::runTerminalCommand,
+                    onInput = viewModel::sendTerminalInput,
+                    onInterrupt = viewModel::interruptTerminalCommand,
+                    onClear = viewModel::clearTerminal,
+                    onToggleTheme = viewModel::toggleTheme,
+                    themeMode = state.themeMode,
+                    title = "PayNux Terminal",
+                    subtitle = "Bash · PRoot Runtime",
+                    liveOutput = terminalLiveOutput,
+                    currentCommand = terminalCurrentCommand,
+                    showQuickCommands = true,
+                    showThemeAction = false,
+                    promptLabel = "paynux",
+                    showRuntimeStatus = true,
+                    showExecuteButton = true,
+                    draftInput = terminalDraftInput,
+                    onDraftInputChange = { terminalDraftInput = it },
+                    draftHistory = terminalDraftHistory,
+                    onDraftHistoryChange = { terminalDraftHistory = it },
+                    draftHistoryIndex = terminalDraftHistoryIndex,
+                    onDraftHistoryIndexChange = { terminalDraftHistoryIndex = it },
+                )
                 RootScreen.SETTINGS -> SettingsScreen(
                     state = state,
                     showBackupDot = !state.backupFeatureSeen,
@@ -2614,104 +2636,6 @@ private fun RootScreenHost(
                     onStopInactiveProcesses = viewModel::stopInactiveDeveloperProcesses,
                     onClearRuntimeCache = viewModel::clearDeveloperRuntimeCache,
                 )
-            }
-        }
-    }
-    if (showQuickTerminal) {
-        QuickTerminalSheet(
-            onDismiss = { showQuickTerminal = false },
-        ) {
-            TerminalScreen(
-                lines = terminalLines,
-                isRunning = isTerminalRunning,
-                onRun = viewModel::runTerminalCommand,
-                onInput = viewModel::sendTerminalInput,
-                onInterrupt = viewModel::interruptTerminalCommand,
-                onClear = viewModel::clearTerminal,
-                onToggleTheme = viewModel::toggleTheme,
-                themeMode = state.themeMode,
-                liveOutput = terminalLiveOutput,
-                currentCommand = terminalCurrentCommand,
-                showThemeAction = false,
-                showQuickCommands = true,
-                compactHeader = true,
-            )
-        }
-    }
-}
-
-@Composable
-private fun QuickTerminalSheet(
-    onDismiss: () -> Unit,
-    content: @Composable () -> Unit,
-) {
-    var sheetFraction by rememberSaveable { mutableFloatStateOf(0.60f) }
-    BackHandler(onBack = onDismiss)
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val density = LocalDensity.current
-        val maxHeightPx = with(density) { maxHeight.toPx() }
-        val keyboardVisible = WindowInsets.ime.getBottom(density) > 0
-        LaunchedEffect(keyboardVisible) {
-            if (keyboardVisible) sheetFraction = 0.85f
-        }
-        val dragState = rememberDraggableState { dragAmount ->
-            sheetFraction = (sheetFraction - dragAmount / maxHeightPx)
-                .coerceIn(0.40f, 0.85f)
-        }
-        Box(Modifier.fillMaxSize()) {
-            // Dimmed backdrop — tap to dismiss.
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.45f))
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() },
-                        onClick = onDismiss,
-                    ),
-            )
-            // This container consumes the keyboard inset outside the sheet rather
-            // than turning it into empty padding inside the terminal.
-            Box(Modifier.fillMaxSize().imePadding()) {
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .fillMaxHeight(sheetFraction)
-                        .draggable(
-                            state = dragState,
-                            orientation = Orientation.Vertical,
-                            startDragImmediately = false,
-                        ),
-                    shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
-                    // Plain theme surface without tonal elevation: the app theme doesn't define
-                    // surfaceContainer* (falls back to M3 lavender) and tonal elevation tints
-                    // every nested Surface orange.
-                    color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 0.dp,
-                    shadowElevation = 28.dp,
-                ) {
-                    Column(Modifier.fillMaxSize().navigationBarsPadding()) {
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(24.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Box(
-                                Modifier
-                                    .width(36.dp)
-                                    .height(4.dp)
-                                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f), CircleShape),
-                            )
-                        }
-                        HorizontalDivider(
-                            thickness = 0.5.dp,
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                        )
-                        Box(Modifier.weight(1f).fillMaxWidth()) { content() }
-                    }
-                }
             }
         }
     }

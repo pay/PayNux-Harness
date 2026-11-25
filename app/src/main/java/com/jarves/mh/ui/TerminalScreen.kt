@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
@@ -114,10 +115,31 @@ fun TerminalScreen(
     showThemeAction: Boolean = false,
     showQuickCommands: Boolean = true,
     compactHeader: Boolean = false,
+    promptLabel: String = "root@pocket",
+    showRuntimeStatus: Boolean = false,
+    showExecuteButton: Boolean = false,
+    draftInput: TextFieldValue? = null,
+    onDraftInputChange: ((TextFieldValue) -> Unit)? = null,
+    draftHistory: List<String>? = null,
+    onDraftHistoryChange: ((List<String>) -> Unit)? = null,
+    draftHistoryIndex: Int? = null,
+    onDraftHistoryIndexChange: ((Int) -> Unit)? = null,
 ) {
-    var commandInput by remember { mutableStateOf(TextFieldValue()) }
-    var commandHistory by remember { mutableStateOf(emptyList<String>()) }
-    var historyIndex by remember { mutableStateOf(-1) }
+    val localCommandInput = remember { mutableStateOf(TextFieldValue()) }
+    val localCommandHistory = remember { mutableStateOf(emptyList<String>()) }
+    val localHistoryIndex = remember { mutableStateOf(-1) }
+    val commandInput = draftInput ?: localCommandInput.value
+    val commandHistory = draftHistory ?: localCommandHistory.value
+    val historyIndex = draftHistoryIndex ?: localHistoryIndex.value
+    fun setCommandInput(next: TextFieldValue) {
+        if (draftInput != null) onDraftInputChange?.invoke(next) else localCommandInput.value = next
+    }
+    fun setCommandHistory(next: List<String>) {
+        if (draftHistory != null) onDraftHistoryChange?.invoke(next) else localCommandHistory.value = next
+    }
+    fun setHistoryIndex(next: Int) {
+        if (draftHistoryIndex != null) onDraftHistoryIndexChange?.invoke(next) else localHistoryIndex.value = next
+    }
     var altActive by rememberSaveable { mutableStateOf(false) }
     var ctrlActive by rememberSaveable { mutableStateOf(false) }
     val terminalScrollState = rememberScrollState()
@@ -140,17 +162,28 @@ fun TerminalScreen(
                 onInput(submitted)
             } else {
                 onRun(submitted)
-                commandHistory = (commandHistory + submitted).takeLast(50)
-                historyIndex = -1
+                setCommandHistory((commandHistory + submitted).takeLast(50))
+                setHistoryIndex(-1)
             }
-            commandInput = TextFieldValue()
+            setCommandInput(TextFieldValue())
         }
+    }
+    val hasTerminalError = lines.lastOrNull()?.let { it.exitCode != 0 } == true
+    val runtimeStatus = when {
+        isRunning -> "Running"
+        hasTerminalError -> "Error"
+        else -> "Ready"
+    }
+    val runtimeStatusColor = when {
+        isRunning -> PocketOrange
+        hasTerminalError -> MaterialTheme.colorScheme.error
+        else -> PocketGreen
     }
 
     LaunchedEffect(commandDraft) {
         if (!commandDraft.isNullOrBlank()) {
-            commandInput = TextFieldValue(commandDraft, TextRange(commandDraft.length))
-            historyIndex = -1
+            setCommandInput(TextFieldValue(commandDraft, TextRange(commandDraft.length)))
+            setHistoryIndex(-1)
             onCommandDraftConsumed()
         }
     }
@@ -199,7 +232,13 @@ fun TerminalScreen(
                         Spacer(Modifier.width(11.dp))
                         Column(Modifier.weight(1f)) {
                             Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                            Text(subtitle, fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(subtitle, fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                if (showRuntimeStatus) {
+                                    Spacer(Modifier.width(6.dp))
+                                    TerminalRuntimeStatus(runtimeStatus, runtimeStatusColor)
+                                }
+                            }
                         }
                         if (isRunning) {
                             (onStop ?: onInterrupt)?.let { stop ->
@@ -250,7 +289,13 @@ fun TerminalScreen(
                             Spacer(Modifier.width(10.dp))
                             Column {
                                 Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
-                                Text(subtitle, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(subtitle, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if (showRuntimeStatus) {
+                                        Spacer(Modifier.width(6.dp))
+                                        TerminalRuntimeStatus(runtimeStatus, runtimeStatusColor)
+                                    }
+                                }
                             }
                         }
                     },
@@ -351,7 +396,7 @@ fun TerminalScreen(
 
                             lines.forEach { item ->
                                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    TerminalCommandPrompt(promptPath = terminalPromptPath, command = item.command, isDark = isDark)
+                                    TerminalCommandPrompt(promptPath = terminalPromptPath, command = item.command, isDark = isDark, promptLabel = promptLabel)
                                     if (item.output.isNotEmpty()) {
                                         Text(
                                             text = sanitizeTerminalOutput(item.output),
@@ -366,7 +411,7 @@ fun TerminalScreen(
                             }
 
                             if (isRunning && currentCommand != null) {
-                                TerminalCommandPrompt(promptPath = terminalPromptPath, command = currentCommand, isDark = isDark)
+                                TerminalCommandPrompt(promptPath = terminalPromptPath, command = currentCommand, isDark = isDark, promptLabel = promptLabel)
                             }
 
                             if (liveOutput.isNotBlank()) {
@@ -386,7 +431,7 @@ fun TerminalScreen(
                         // empty until the user types. A permanent prompt/cursor here
                         // changed the console height and made auto-scroll look like a
                         // full terminal refresh on every blink.
-                        val prefix = if (isRunning) "" else "root@pocket:$terminalPromptPath# "
+                        val prefix = if (isRunning) "" else "$promptLabel:$terminalPromptPath# "
                         val prefixVisualTransformation = remember(prefix, isDark) {
                             VisualTransformation { text ->
                                 val transformed = buildAnnotatedString {
@@ -408,8 +453,9 @@ fun TerminalScreen(
                             }
                         }
 
-                        BasicTextField(
-                            value = commandInput,
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            BasicTextField(
+                                value = commandInput,
                             onValueChange = { next ->
                                 if (ctrlActive && next.text.length > commandInput.text.length) {
                                     val inserted = next.text.substring(
@@ -422,19 +468,19 @@ fun TerminalScreen(
                                         } else {
                                             // A shell with no foreground process uses
                                             // Ctrl+C to cancel the current command line.
-                                            commandInput = TextFieldValue()
+                                            setCommandInput(TextFieldValue())
                                         }
                                         ctrlActive = false
                                     } else {
-                                        commandInput = next
+                                        setCommandInput(next)
                                         ctrlActive = false
                                     }
                                 } else {
-                                    commandInput = next
+                                    setCommandInput(next)
                                 }
                             },
                             modifier = Modifier
-                                .fillMaxWidth()
+                                .weight(1f)
                                 .focusRequester(inputFocusRequester),
                             singleLine = false,
                             visualTransformation = prefixVisualTransformation,
@@ -453,6 +499,18 @@ fun TerminalScreen(
                                 onGo = { submitCommand() },
                             ),
                         )
+                            if (showExecuteButton) {
+                                Spacer(Modifier.width(8.dp))
+                                IconButton(onClick = submitCommand, modifier = Modifier.size(40.dp)) {
+                                    Icon(
+                                        Icons.Default.Send,
+                                        contentDescription = "Execute command",
+                                        tint = PocketOrange,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            }
+                        }
                     }
                     Spacer(Modifier.height(24.dp))
                 }
@@ -470,25 +528,28 @@ fun TerminalScreen(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 TerminalKeyButton("↑", stringResource(R.string.ws_terminal_previous_command)) {
-                    commandHistory.getOrNull(if (historyIndex < 0) commandHistory.lastIndex else (historyIndex - 1).coerceAtLeast(0))?.let {
-                        historyIndex = if (historyIndex < 0) commandHistory.lastIndex else (historyIndex - 1).coerceAtLeast(0)
-                        commandInput = TextFieldValue(it, TextRange(it.length))
+                    val nextIndex = if (historyIndex < 0) commandHistory.lastIndex else (historyIndex - 1).coerceAtLeast(0)
+                    commandHistory.getOrNull(nextIndex)?.let {
+                        setHistoryIndex(nextIndex)
+                        setCommandInput(TextFieldValue(it, TextRange(it.length)))
                     }
                 }
                 TerminalKeyButton("↓", stringResource(R.string.ws_terminal_next_command)) {
                     if (historyIndex >= 0) {
-                        historyIndex = (historyIndex + 1).takeIf { it < commandHistory.size } ?: -1
-                        commandInput = TextFieldValue(commandHistory.getOrNull(historyIndex) ?: "", TextRange((commandHistory.getOrNull(historyIndex) ?: "").length))
+                        val nextIndex = (historyIndex + 1).takeIf { it < commandHistory.size } ?: -1
+                        setHistoryIndex(nextIndex)
+                        val draft = commandHistory.getOrNull(nextIndex) ?: ""
+                        setCommandInput(TextFieldValue(draft, TextRange(draft.length)))
                     }
                 }
                 TerminalIconKeyButton(Icons.Default.ArrowBack, stringResource(R.string.ws_terminal_cursor_left)) {
-                    commandInput = commandInput.copy(selection = TextRange((commandInput.selection.start - 1).coerceAtLeast(0)))
+                    setCommandInput(commandInput.copy(selection = TextRange((commandInput.selection.start - 1).coerceAtLeast(0))))
                 }
                 TerminalIconKeyButton(Icons.Default.ArrowForward, stringResource(R.string.ws_terminal_cursor_right)) {
-                    commandInput = commandInput.copy(selection = TextRange((commandInput.selection.end + 1).coerceAtMost(commandInput.text.length)))
+                    setCommandInput(commandInput.copy(selection = TextRange((commandInput.selection.end + 1).coerceAtMost(commandInput.text.length))))
                 }
                 TerminalKeyButton("ALT", stringResource(R.string.ws_terminal_alt_modifier), active = altActive, fixedWidth = true) { altActive = !altActive }
-                TerminalKeyButton("ESC", stringResource(R.string.ws_terminal_escape)) { commandInput = TextFieldValue() }
+                TerminalKeyButton("ESC", stringResource(R.string.ws_terminal_escape)) { setCommandInput(TextFieldValue()) }
                 TerminalKeyButton("CTRL", stringResource(R.string.ws_terminal_ctrl_modifier), active = ctrlActive, fixedWidth = true) {
                     ctrlActive = !ctrlActive
                     if (ctrlActive) openTerminalKeyboard()
@@ -536,13 +597,22 @@ private fun TerminalIconKeyButton(icon: androidx.compose.ui.graphics.vector.Imag
 }
 
 @Composable
-private fun TerminalCommandPrompt(promptPath: String, command: String, isDark: Boolean = true) {
+private fun TerminalRuntimeStatus(status: String, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(6.dp).background(color, CircleShape))
+        Spacer(Modifier.width(4.dp))
+        Text(status, fontSize = 10.sp, color = color, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun TerminalCommandPrompt(promptPath: String, command: String, isDark: Boolean = true, promptLabel: String = "root@pocket") {
     val promptGreen = if (isDark) PocketGreen else Color(0xFF0D7A3E)
     val commandColor = if (isDark) Color(0xFFF0F6FC) else MaterialTheme.colorScheme.onSurface
-    val promptText = remember(promptPath, command, isDark) {
+    val promptText = remember(promptPath, command, isDark, promptLabel) {
         buildAnnotatedString {
             withStyle(SpanStyle(color = promptGreen, fontWeight = FontWeight.Bold)) {
-                append("root@pocket:$promptPath# ")
+                append("$promptLabel:$promptPath# ")
             }
             withStyle(SpanStyle(color = commandColor, fontWeight = FontWeight.SemiBold)) {
                 append(command)
