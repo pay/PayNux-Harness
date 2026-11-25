@@ -5426,7 +5426,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private const val MEMORY_PRESSURE_TERMINAL_LINES = 20
         private const val MEMORY_PRESSURE_LOGCAT_LINES = 500
         private const val MEMORY_PRESSURE_TEXT_CHARS = 64 * 1024
-        const val LOGCAT_GRANT_COMMAND = "adb shell pm grant com.jarves.mh android.permission.READ_LOGS"
+        const val LOGCAT_GRANT_COMMAND = "adb shell pm grant com.paynux.harness android.permission.READ_LOGS"
         private const val MAX_ATTACHMENTS_PER_MESSAGE = 5
         private const val MAX_PROCESS_OUTPUT_BYTES = 512 * 1024
         private const val MAX_ATTACHMENT_BYTES = 25L * 1024L * 1024L
