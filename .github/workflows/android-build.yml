@@ -59,7 +59,46 @@ jobs:
           EXPECTED_SHA="a659ab9188956fc4721ca86fb21b5118e0e489f47a5e02ae6b4f2fb423659d78"
           echo "$EXPECTED_SHA  dist/runtime-bundles/$FILE" | sha256sum --check
 
+      - name: Configure and verify PayNux signing key
+        shell: bash
+        env:
+          MH_UPLOAD_KEYSTORE_BASE64: ${{ secrets.MH_UPLOAD_KEYSTORE_BASE64 }}
+          MH_UPLOAD_STORE_PASSWORD: ${{ secrets.MH_UPLOAD_STORE_PASSWORD }}
+          MH_UPLOAD_KEY_ALIAS: ${{ secrets.MH_UPLOAD_KEY_ALIAS }}
+          MH_UPLOAD_KEY_PASSWORD: ${{ secrets.MH_UPLOAD_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          test -n "$MH_UPLOAD_KEYSTORE_BASE64"
+          test -n "$MH_UPLOAD_STORE_PASSWORD"
+          test -n "$MH_UPLOAD_KEY_ALIAS"
+          test -n "$MH_UPLOAD_KEY_PASSWORD"
+
+          KEYSTORE="$RUNNER_TEMP/paynux-release.jks"
+          printf '%s' "$MH_UPLOAD_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+          chmod 600 "$KEYSTORE"
+
+          ACTUAL_FP="$(keytool -list -v \
+            -keystore "$KEYSTORE" \
+            -storepass:env MH_UPLOAD_STORE_PASSWORD \
+            -alias "$MH_UPLOAD_KEY_ALIAS" |
+            awk '/SHA256:/ {gsub(":", "", $2); print toupper($2); exit}')"
+
+          EXPECTED_FP="48E685FAC5DDDC0979D688972B916DA8A3AD4DA603470332E44321C96241BFDB"
+
+          if [ "$ACTUAL_FP" != "$EXPECTED_FP" ]; then
+            echo "ERROR: Signing certificate fingerprint mismatch."
+            exit 1
+          fi
+
+          echo "PayNux signing certificate verified."
+
       - name: Build Online Debug APK
+        env:
+          MH_UPLOAD_STORE_FILE: ${{ runner.temp }}/paynux-release.jks
+          MH_UPLOAD_STORE_PASSWORD: ${{ secrets.MH_UPLOAD_STORE_PASSWORD }}
+          MH_UPLOAD_KEY_ALIAS: ${{ secrets.MH_UPLOAD_KEY_ALIAS }}
+          MH_UPLOAD_KEY_PASSWORD: ${{ secrets.MH_UPLOAD_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace :app:assembleOnlineDebug
@@ -76,6 +115,23 @@ jobs:
             echo "ERROR: Online Debug APK tidak ditemukan."
             exit 1
           fi
+
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          test -x "$APKSIGNER"
+
+          SIGNER_FP="$("$APKSIGNER" verify --print-certs "$APK" |
+            awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {
+              print toupper($2); exit
+            }' | tr -d ':')"
+
+          EXPECTED_FP="48E685FAC5DDDC0979D688972B916DA8A3AD4DA603470332E44321C96241BFDB"
+
+          if [ "$SIGNER_FP" != "$EXPECTED_FP" ]; then
+            echo "ERROR: APK signer fingerprint mismatch."
+            exit 1
+          fi
+
+          echo "APK signer fingerprint verified: $SIGNER_FP"
 
           mkdir -p artifacts
           cp "$APK" artifacts/app-online-debug.apk

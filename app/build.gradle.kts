@@ -127,6 +127,9 @@ android {
 
     buildTypes {
         debug {
+            if (hasUploadSigning) {
+                signingConfig = signingConfigs.getByName("upload")
+            }
             buildConfigField(
                 "String",
                 "TEST_OPENROUTER_API_KEY",
