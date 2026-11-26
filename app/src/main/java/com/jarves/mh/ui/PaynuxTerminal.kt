@@ -8,6 +8,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -66,6 +68,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -75,6 +78,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.jarves.mh.R
 import com.jarves.mh.runtime.RuntimeInstaller
 import com.termux.terminal.KeyHandler
 import com.termux.terminal.TerminalColors
@@ -136,11 +140,11 @@ class PaynuxTerminalController(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     init {
-        // PayNux palette: #0B0F14 background, light text, red cursor.
+        // PayNux palette: #0B0F14 background, light text, orange cursor.
         val colors = TerminalColors.COLOR_SCHEME.mDefaultColors
         colors[256] = 0xFFE5E7EB.toInt() // foreground
         colors[257] = 0xFF0B0F14.toInt() // background
-        colors[258] = 0xFFDC2626.toInt() // cursor
+        colors[258] = 0xFFF48A4F.toInt() // cursor (orange)
     }
 
     val textSizePx: Int get() = fontPx
@@ -358,7 +362,13 @@ class PaynuxTerminalController(
     override fun readShiftKey(): Boolean = false
     override fun readFnKey(): Boolean = false
     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession?): Boolean = false
-    override fun onEmulatorSet() {}
+    override fun onEmulatorSet() {
+        // Blinking cursor; must be (re)started whenever a session's emulator is attached.
+        view?.let {
+            it.setTerminalCursorBlinkerRate(600)
+            it.setTerminalCursorBlinkerState(true, false)
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -428,19 +438,24 @@ private fun PaynuxToolbar(controller: PaynuxTerminalController, imeVisible: Bool
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(
-            buildAnnotatedString {
-                withStyle(SpanStyle(color = PxOrange)) { append("> ") }
-                withStyle(SpanStyle(color = Color.White)) { append("Chris Pay") }
-                withStyle(SpanStyle(color = PxRed)) { append("Nux") }
-            },
-            fontWeight = FontWeight.Bold,
-            fontSize = 16.sp,
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
+        Row(
+            Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            PaynuxMark()
+            Text(
+                buildAnnotatedString {
+                    withStyle(SpanStyle(color = Color.White)) { append("Pay") }
+                    withStyle(SpanStyle(color = PxRed)) { append("Nux") }
+                },
+                fontWeight = FontWeight.Bold,
+                fontSize = 19.sp,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         CircleButton(Icons.Default.History, "Saved logs", PxCircle, Color.White, onHistory)
         CircleButton(Icons.Default.ContentCopy, "Copy", PxCircle, Color.White) { controller.copyScreen() }
         CircleButton(Icons.Default.ContentPaste, "Paste", PxCircle, Color.White) { controller.paste() }
@@ -448,6 +463,16 @@ private fun PaynuxToolbar(controller: PaynuxTerminalController, imeVisible: Bool
         CircleButton(Icons.Default.KeyboardReturn, "Enter", PxCircle, Color.White) { controller.sendEnter() }
         CircleButton(Icons.Default.Keyboard, "Keyboard", Color(0xFF3A2414), PxOrange) { controller.toggleKeyboard(imeVisible) }
     }
+}
+
+/** PayNux icon (res/drawable-nodpi/paynux_mark.png). */
+@Composable
+private fun PaynuxMark() {
+    Image(
+        painter = painterResource(R.drawable.paynux_mark),
+        contentDescription = "PayNux",
+        modifier = Modifier.size(34.dp),
+    )
 }
 
 @Composable
@@ -463,22 +488,27 @@ private fun CircleButton(icon: ImageVector, description: String, background: Col
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PaynuxTabs(controller: PaynuxTerminalController) {
-    Row(Modifier.fillMaxWidth().height(34.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
+    Row(
+        Modifier.fillMaxWidth().height(32.dp).padding(start = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // The lines share the full width equally: 1 tab = full line, 2 tabs = halves, 3 = thirds...
+        Row(Modifier.weight(1f).fillMaxHeight()) {
             controller.tabs.forEach { tab ->
                 key(tab.id) {
                     val active = tab.id == controller.selectedId
                     var menu by remember { mutableStateOf(false) }
                     Box(
                         Modifier
-                            .width(40.dp)
-                            .height(34.dp)
+                            .weight(1f)
+                            .fillMaxHeight()
                             .combinedClickable(onClick = { controller.selectTab(tab.id) }, onLongClick = { menu = true }),
                         contentAlignment = Alignment.Center,
                     ) {
                         Box(
                             Modifier
-                                .width(26.dp)
+                                .fillMaxWidth()
+                                .padding(horizontal = 2.dp)
                                 .height(5.dp)
                                 .clip(RoundedCornerShape(3.dp))
                                 .background(
@@ -499,7 +529,7 @@ private fun PaynuxTabs(controller: PaynuxTerminalController) {
             }
         }
         Box(
-            Modifier.size(width = 40.dp, height = 34.dp).clickable { controller.newTab() },
+            Modifier.size(width = 40.dp, height = 32.dp).clickable { controller.newTab() },
             contentAlignment = Alignment.Center,
         ) { Text("+", color = PxOrange, fontSize = 20.sp, fontWeight = FontWeight.Medium) }
     }
