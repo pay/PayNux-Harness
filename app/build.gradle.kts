@@ -169,7 +169,7 @@ android {
         }
     }
     packaging.resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
-    packaging.jniLibs.useLegacyPackaging = true
+    packaging.jniLibs.useLegacyPackaging = false
     androidResources.noCompress += "zst"
 }
 

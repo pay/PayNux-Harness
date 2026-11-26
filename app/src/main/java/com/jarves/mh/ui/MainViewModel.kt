@@ -438,7 +438,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
     @Volatile private var projectTerminalProcess: Process? = null
     @Volatile private var terminalProcess: Process? = null
-    private val paynuxTerminalLazy = lazy { PaynuxTerminalController(getApplication(), installer) }
+    private val paynuxTerminalLazy = lazy { PaynuxTerminalController(getApplication(), installer) { _state.value.projects.map { it.slug to it.id } } }
     val paynuxTerminal: PaynuxTerminalController get() = paynuxTerminalLazy.value
     @Volatile private var projectTerminalProjectId: String? = null
     @Volatile private var projectTerminalStopRequested: Boolean = false

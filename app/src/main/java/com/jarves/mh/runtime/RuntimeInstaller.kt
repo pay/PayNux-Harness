@@ -1647,7 +1647,7 @@ class RuntimeInstaller(private val context: Context) {
      * PRoot, started in /root (not pinned to /workspace) with extra host paths bound in.
      * Does not alter [process], which the agents and project terminals keep using.
      */
-    fun interactiveShellLaunch(): InteractiveShellLaunch {
+    fun interactiveShellLaunch(projects: List<Pair<String, String>> = emptyList()): InteractiveShellLaunch {
         check(ensureRootfsCompatibilityLinks()) { "Core runtime has an invalid Linux filesystem layout" }
         val runtime = installedRuntime()
         val terminalWorkspace = File(context.filesDir, "workspaces/terminal").apply { mkdirs() }
@@ -1674,6 +1674,14 @@ class RuntimeInstaller(private val context: Context) {
             listOf("/system", "/apex", "/vendor", "/product").forEach { if (File(it).exists()) add(it to it) }
             add(terminalWorkspace.absolutePath to "/workspace")
             add(File(context.filesDir, "workspaces").absolutePath to "/projects")
+            // Each project at /workspace/<slug>, exactly like the project terminals see it.
+            projects.forEach { (slug, id) ->
+                val dir = File(context.filesDir, "workspaces/$id")
+                if (slug.isNotBlank() && !slug.contains('/') && dir.isDirectory) {
+                    File(terminalWorkspace, slug).mkdirs()
+                    add(dir.absolutePath to "/workspace/$slug")
+                }
+            }
             add(bridge.absolutePath to "/pocket-bridge")
             // Wider host access: app data dir (same absolute path as Android sees it),
             // shared storage and /data/local/tmp. Paths the OS denies simply stay empty.

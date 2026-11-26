@@ -73,6 +73,7 @@ private val PxKey = Color(0xFF161B22)
 class PaynuxTerminalController(
     private val app: Application,
     private val installer: RuntimeInstaller,
+    private val projectSlugs: () -> List<Pair<String, String>> = { emptyList() },
 ) : TerminalSessionClient, TerminalViewClient {
 
     var session by mutableStateOf<TerminalSession?>(null)
@@ -103,8 +104,9 @@ class PaynuxTerminalController(
         if (session != null || starting) return
         starting = true
         try {
+            val slugs = projectSlugs()
             val launch = withContext(Dispatchers.IO) {
-                if (!installer.isInstalled()) null else installer.interactiveShellLaunch()
+                if (!installer.isInstalled()) null else installer.interactiveShellLaunch(slugs)
             }
             if (launch == null) {
                 message = "Linux runtime is not installed yet. Set it up first, then reopen this tab."
@@ -233,6 +235,7 @@ fun PaynuxTerminalScreen(controller: PaynuxTerminalController) {
             .imePadding(),
     ) {
         PaynuxTerminalHeader(controller)
+        PaynuxStorageBanner()
         Box(Modifier.weight(1f).fillMaxWidth()) {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
@@ -350,5 +353,65 @@ private fun RowScope.ExtraKey(label: String, active: Boolean = false, onClick: (
         contentAlignment = Alignment.Center,
     ) {
         Text(label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium, fontFamily = FontFamily.Monospace)
+    }
+}
+
+private fun hasAllFilesAccess(context: Context): Boolean =
+    if (android.os.Build.VERSION.SDK_INT >= 30) {
+        android.os.Environment.isExternalStorageManager()
+    } else {
+        androidx.core.content.ContextCompat.checkSelfPermission(
+            context, android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+
+/** Shown only while shared storage (/sdcard, /storage) is still blocked for the terminal. */
+@Composable
+private fun PaynuxStorageBanner() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var granted by androidx.compose.runtime.remember { mutableStateOf(hasAllFilesAccess(context)) }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) granted = hasAllFilesAccess(context)
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+    val legacyLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions(),
+    ) { granted = hasAllFilesAccess(context) }
+    if (granted) return
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(PxKey)
+            .clickable {
+                if (android.os.Build.VERSION.SDK_INT >= 30) {
+                    val pkg = android.net.Uri.parse("package:" + context.packageName)
+                    val intent = android.content.Intent(
+                        android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, pkg,
+                    )
+                    runCatching { context.startActivity(intent) }.onFailure {
+                        context.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                    }
+                } else {
+                    legacyLauncher.launch(
+                        arrayOf(
+                            android.Manifest.permission.READ_EXTERNAL_STORAGE,
+                            android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                        ),
+                    )
+                }
+            }
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "Tap to allow storage access (/sdcard, /storage)",
+            color = PxRed,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+        )
     }
 }
