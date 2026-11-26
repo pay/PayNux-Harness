@@ -1643,6 +1643,39 @@ class RuntimeInstaller(private val context: Context) {
     }
 
     /**
+     * PRoot passes this app's Android supplementary group IDs into the guest, but the Ubuntu
+     * /etc/group does not know them, so `groups` prints "cannot find name for group ID ...".
+     * IDs change per installation, so register whatever is missing on every launch.
+     */
+    private fun syncAndroidGroups() {
+        runCatching {
+            val groupFile = File(rootfs, "etc/group")
+            if (!groupFile.isFile) return
+            val gids = File("/proc/self/status").readLines()
+                .firstOrNull { it.startsWith("Groups:") }
+                ?.removePrefix("Groups:")?.trim()?.split(Regex("\\s+"))
+                ?.mapNotNull { it.toIntOrNull() }
+                .orEmpty()
+            val text = groupFile.readText()
+            val rows = text.lines().filter { it.isNotBlank() }.map { it.split(":") }
+            val knownIds = rows.mapNotNull { it.getOrNull(2)?.toIntOrNull() }.toSet()
+            val usedNames = rows.mapNotNull { it.firstOrNull() }.toMutableSet()
+            val add = StringBuilder()
+            gids.distinct().filter { it !in knownIds }.forEach { gid ->
+                val preferred = when (gid) {
+                    3003 -> "inet"
+                    9997 -> "everybody"
+                    else -> "android_$gid"
+                }
+                val name = if (usedNames.add(preferred)) preferred else "android_$gid".also { usedNames.add(it) }
+                add.append("$name:x:$gid:\n")
+            }
+            if (add.isEmpty()) return
+            groupFile.appendText((if (text.endsWith("\n") || text.isEmpty()) "" else "\n") + add)
+        }
+    }
+
+    /**
      * Launch spec for the bottom-bar PayNux terminal: an interactive login-style bash inside
      * PRoot, started in /root (not pinned to /workspace) with extra host paths bound in.
      * Does not alter [process], which the agents and project terminals keep using.
@@ -1653,6 +1686,7 @@ class RuntimeInstaller(private val context: Context) {
         val terminalWorkspace = File(context.filesDir, "workspaces/terminal").apply { mkdirs() }
         File(rootfs, "workspace").mkdirs()
         File(rootfs, "root").mkdirs()
+        syncAndroidGroups()
         writeAndroidGradleConfiguration(rootfs)
         ensureWorkspaceTrust("/workspace")
         val bridge = File(context.filesDir, "runtime-bridge").apply { mkdirs() }

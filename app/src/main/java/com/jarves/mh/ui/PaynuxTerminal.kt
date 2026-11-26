@@ -7,68 +7,108 @@ import android.content.Context
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.inputmethod.InputMethodManager
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.KeyboardReturn
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.jarves.mh.runtime.RuntimeInstaller
+import com.termux.terminal.KeyHandler
 import com.termux.terminal.TerminalColors
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private val PxBg = Color(0xFF0B0F14)
+private val PxPanel = Color(0xFF111820)
 private val PxRed = Color(0xFFDC2626)
+private val PxOrange = Color(0xFFF48A4F)
 private val PxMuted = Color(0xFFA1A1AA)
-private val PxKey = Color(0xFF161B22)
+private val PxKey = Color(0xFF1B2430)
+private val PxCircle = Color(0xFF2A3038)
+private val PxLine = Color(0xFF3A414B)
+
+private const val MAX_TABS = 8
+private const val MAX_LOGS = 20
+
+class PaynuxTab(val id: Int, val session: TerminalSession)
 
 /**
- * Owns the PayNux-style terminal session shown by the bottom-bar Terminal tab.
- * It lives in MainViewModel so the shell survives tab switches.
+ * Owns the PayNux-style terminal sessions (tabs) shown by the bottom-bar Terminal tab.
+ * It lives in MainViewModel so the shells survive tab switches.
  */
 class PaynuxTerminalController(
     private val app: Application,
@@ -76,18 +116,23 @@ class PaynuxTerminalController(
     private val projectSlugs: () -> List<Pair<String, String>> = { emptyList() },
 ) : TerminalSessionClient, TerminalViewClient {
 
-    var session by mutableStateOf<TerminalSession?>(null)
+    val tabs = mutableStateListOf<PaynuxTab>()
+    var selectedId by mutableIntStateOf(-1)
         private set
     var message by mutableStateOf<String?>(null)
-        private set
-    var ended by mutableStateOf(false)
         private set
     var ctrl by mutableStateOf(false)
     var alt by mutableStateOf(false)
 
+    val currentSession: TerminalSession?
+        get() = tabs.firstOrNull { it.id == selectedId }?.session
+
     internal var view: TerminalView? = null
     private var fontPx = (14 * app.resources.displayMetrics.density).toInt()
     private var starting = false
+    private var shuttingDown = false
+    private var nextId = 1
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     init {
         // PayNux palette: #0B0F14 background, light text, red cursor.
@@ -99,9 +144,18 @@ class PaynuxTerminalController(
 
     val textSizePx: Int get() = fontPx
 
-    /** Creates the session once; must be called on the main thread (TerminalSession needs a Looper). */
+    /** Creates the first tab once; must run on the main thread (TerminalSession needs a Looper). */
     suspend fun ensureStarted() {
-        if (session != null || starting) return
+        if (tabs.isNotEmpty() || starting) return
+        addTab()
+    }
+
+    fun newTab() {
+        scope.launch { addTab() }
+    }
+
+    private suspend fun addTab() {
+        if (starting || tabs.size >= MAX_TABS) return
         starting = true
         try {
             val slugs = projectSlugs()
@@ -113,8 +167,7 @@ class PaynuxTerminalController(
                 return
             }
             message = null
-            ended = false
-            session = TerminalSession(
+            val session = TerminalSession(
                 launch.executable,
                 launch.cwd,
                 launch.args.toTypedArray(),
@@ -122,6 +175,9 @@ class PaynuxTerminalController(
                 4000,
                 this,
             )
+            val tab = PaynuxTab(nextId++, session)
+            tabs.add(tab)
+            selectedId = tab.id
         } catch (e: Exception) {
             message = "Could not start terminal: ${e.message.orEmpty()}"
         } finally {
@@ -129,25 +185,70 @@ class PaynuxTerminalController(
         }
     }
 
-    suspend fun restart() {
-        session?.finishIfRunning()
-        session = null
-        ensureStarted()
+    fun selectTab(id: Int) {
+        if (tabs.any { it.id == id }) selectedId = id
+    }
+
+    fun closeTab(id: Int) {
+        val tab = tabs.firstOrNull { it.id == id } ?: return
+        removeTab(tab)
+        tab.session.finishIfRunning()
+    }
+
+    private fun removeTab(tab: PaynuxTab) {
+        saveLog(tab)
+        val index = tabs.indexOf(tab)
+        if (index < 0) return
+        tabs.removeAt(index)
+        if (selectedId == tab.id) {
+            selectedId = tabs.getOrNull((index - 1).coerceAtLeast(0))?.id ?: -1
+        }
+        if (tabs.isEmpty() && !shuttingDown) newTab()
     }
 
     fun shutdown() {
-        session?.finishIfRunning()
+        shuttingDown = true
+        tabs.toList().forEach {
+            saveLog(it)
+            it.session.finishIfRunning()
+        }
+        scope.cancel()
     }
 
+    // ---- actions ----
     fun paste() {
         val cm = app.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val text = cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(app)?.toString()
-        if (!text.isNullOrEmpty()) session?.emulator?.paste(text)
+        if (!text.isNullOrEmpty()) currentSession?.emulator?.paste(text)
     }
 
     fun copyScreen() {
-        val text = session?.emulator?.screen?.transcriptText?.trimEnd().orEmpty()
+        val text = currentSession?.emulator?.screen?.transcriptText?.trimEnd().orEmpty()
         if (text.isNotEmpty()) copyToClipboard(text)
+    }
+
+    /** Saves the transcript to the log history, then clears the screen without confirmation. */
+    fun clearScreen() {
+        val tab = tabs.firstOrNull { it.id == selectedId } ?: return
+        saveLog(tab)
+        tab.session.reset()
+        tab.session.write("\u000c") // Ctrl-L: ask the shell to redraw its prompt
+    }
+
+    fun sendEnter() {
+        currentSession?.write("\r")
+    }
+
+    fun toggleKeyboard(visible: Boolean) {
+        view?.let { v ->
+            val imm = app.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            if (visible) {
+                imm.hideSoftInputFromWindow(v.windowToken, 0)
+            } else {
+                v.requestFocus()
+                imm.showSoftInput(v, 0)
+            }
+        }
     }
 
     fun showKeyboard() {
@@ -157,8 +258,15 @@ class PaynuxTerminalController(
         }
     }
 
+    private fun consumeModifiers(): Int {
+        var mod = 0
+        if (ctrl) { mod = mod or KeyHandler.KEYMOD_CTRL; ctrl = false }
+        if (alt) { mod = mod or KeyHandler.KEYMOD_ALT; alt = false }
+        return mod
+    }
+
     fun sendKey(keyCode: Int) {
-        view?.handleKeyCode(keyCode, 0)
+        view?.handleKeyCode(keyCode, consumeModifiers())
     }
 
     fun sendChar(c: Char) {
@@ -170,10 +278,41 @@ class PaynuxTerminalController(
         cm.setPrimaryClip(ClipData.newPlainText("PayNux terminal", text))
     }
 
+    // ---- log history (survives app restarts) ----
+    private val logDir: File get() = File(app.filesDir, "paynux-terminal-logs")
+
+    private fun saveLog(tab: PaynuxTab) {
+        runCatching {
+            val text = tab.session.emulator?.screen?.transcriptText?.trimEnd().orEmpty()
+            if (text.isBlank()) return
+            val dir = logDir.apply { mkdirs() }
+            val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+            File(dir, "$stamp-tab${tab.id}.log").writeText(text.takeLast(200_000))
+            dir.listFiles()?.sortedByDescending { it.lastModified() }?.drop(MAX_LOGS)?.forEach { it.delete() }
+        }
+    }
+
+    fun listLogs(): List<File> =
+        logDir.listFiles()?.filter { it.isFile }?.sortedByDescending { it.lastModified() }.orEmpty()
+
+    /** Prints a saved log into the current terminal screen (display only, nothing is executed). */
+    fun loadLog(file: File) {
+        val emulator = currentSession?.emulator ?: return
+        val body = runCatching { file.readText() }.getOrNull().orEmpty()
+            .takeLast(100_000).replace("\r\n", "\n").replace("\n", "\r\n")
+        val bytes = ("\r\n--- saved log: ${file.name} ---\r\n$body\r\n--- end of saved log ---\r\n").toByteArray()
+        emulator.append(bytes, bytes.size)
+        view?.onScreenUpdated()
+    }
+
     // ---- TerminalSessionClient ----
-    override fun onTextChanged(changedSession: TerminalSession) { view?.onScreenUpdated() }
+    override fun onTextChanged(changedSession: TerminalSession) {
+        if (changedSession === currentSession) view?.onScreenUpdated()
+    }
     override fun onTitleChanged(changedSession: TerminalSession) {}
-    override fun onSessionFinished(finishedSession: TerminalSession) { ended = true }
+    override fun onSessionFinished(finishedSession: TerminalSession) {
+        tabs.firstOrNull { it.session === finishedSession }?.let { removeTab(it) }
+    }
     override fun onCopyTextToClipboard(session: TerminalSession, text: String?) { if (!text.isNullOrEmpty()) copyToClipboard(text) }
     override fun onPasteTextFromClipboard(session: TerminalSession?) { paste() }
     override fun onBell(session: TerminalSession) {}
@@ -195,10 +334,9 @@ class PaynuxTerminalController(
     // ---- TerminalViewClient ----
     override fun onScale(scale: Float): Float {
         if (scale < 0.9f || scale > 1.1f) {
-            val step = (2 * app.resources.displayMetrics.density).toInt().coerceAtLeast(1)
-            val min = (8 * app.resources.displayMetrics.density).toInt()
-            val max = (32 * app.resources.displayMetrics.density).toInt()
-            fontPx = (fontPx + if (scale > 1f) step else -step).coerceIn(min, max)
+            val density = app.resources.displayMetrics.density
+            val step = (2 * density).toInt().coerceAtLeast(1)
+            fontPx = (fontPx + if (scale > 1f) step else -step).coerceIn((8 * density).toInt(), (32 * density).toInt())
             view?.setTextSize(fontPx)
             return 1.0f
         }
@@ -222,10 +360,13 @@ class PaynuxTerminalController(
     override fun onEmulatorSet() {}
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PaynuxTerminalScreen(controller: PaynuxTerminalController) {
     LaunchedEffect(controller) { controller.ensureStarted() }
     DisposableEffect(controller) { onDispose { controller.view = null } }
+    val imeVisible = WindowInsets.isImeVisible
+    var showHistory by remember { mutableStateOf(false) }
 
     Column(
         Modifier
@@ -234,7 +375,14 @@ fun PaynuxTerminalScreen(controller: PaynuxTerminalController) {
             .statusBarsPadding()
             .imePadding(),
     ) {
-        PaynuxTerminalHeader(controller)
+        PaynuxToolbar(controller, imeVisible, onHistory = { showHistory = true })
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(Brush.horizontalGradient(listOf(PxRed, PxOrange))),
+        )
+        PaynuxTabs(controller)
         PaynuxStorageBanner()
         Box(Modifier.weight(1f).fillMaxWidth()) {
             AndroidView(
@@ -250,7 +398,7 @@ fun PaynuxTerminalScreen(controller: PaynuxTerminalController) {
                 },
                 update = { v ->
                     controller.view = v
-                    val s = controller.session
+                    val s = controller.currentSession
                     if (s != null && v.currentSession !== s) {
                         s.updateTerminalSessionClient(controller)
                         v.attachSession(s)
@@ -269,76 +417,158 @@ fun PaynuxTerminalScreen(controller: PaynuxTerminalController) {
         }
         PaynuxExtraKeys(controller)
     }
+    if (showHistory) PaynuxHistoryDialog(controller) { showHistory = false }
 }
 
 @Composable
-private fun PaynuxTerminalHeader(controller: PaynuxTerminalController) {
-    val scope = rememberCoroutineScope()
+private fun PaynuxToolbar(controller: PaynuxTerminalController, imeVisible: Boolean, onHistory: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().height(48.dp).padding(start = 14.dp, end = 4.dp),
+        Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
+        Text(
+            buildAnnotatedString {
+                withStyle(SpanStyle(color = PxOrange)) { append("> ") }
+                withStyle(SpanStyle(color = PxRed)) { append("Ubuntu") }
+            },
+            fontWeight = FontWeight.Bold,
+            fontSize = 20.sp,
+            fontFamily = FontFamily.Monospace,
+            maxLines = 1,
+            modifier = Modifier.weight(1f),
+        )
+        CircleButton(Icons.Default.History, "Saved logs", PxCircle, Color.White, onHistory)
+        CircleButton(Icons.Default.ContentCopy, "Copy", PxCircle, Color.White) { controller.copyScreen() }
+        CircleButton(Icons.Default.ContentPaste, "Paste", PxCircle, Color.White) { controller.paste() }
+        CircleButton(Icons.Default.Delete, "Clear", Color(0xFF3A1417), PxRed) { controller.clearScreen() }
+        CircleButton(Icons.Default.KeyboardReturn, "Enter", PxCircle, Color.White) { controller.sendEnter() }
+        CircleButton(Icons.Default.Keyboard, "Keyboard", Color(0xFF3A2414), PxOrange) { controller.toggleKeyboard(imeVisible) }
+    }
+}
+
+@Composable
+private fun CircleButton(icon: ImageVector, description: String, background: Color, tint: Color, onClick: () -> Unit) {
+    Box(
+        Modifier.size(36.dp).clip(CircleShape).background(background).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, description, tint = tint, modifier = Modifier.size(19.dp))
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun PaynuxTabs(controller: PaynuxTerminalController) {
+    Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
+            controller.tabs.forEach { tab ->
+                key(tab.id) {
+                    val active = tab.id == controller.selectedId
+                    var menu by remember { mutableStateOf(false) }
+                    Box(
+                        Modifier
+                            .width(64.dp)
+                            .height(40.dp)
+                            .combinedClickable(onClick = { controller.selectTab(tab.id) }, onLongClick = { menu = true }),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            tab.id.toString(),
+                            color = if (active) Color.White else PxMuted,
+                            fontSize = 15.sp,
+                            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                        )
+                        Box(
+                            Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(horizontal = 8.dp)
+                                .fillMaxWidth()
+                                .height(3.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(
+                                    brush = if (active) Brush.horizontalGradient(listOf(PxRed, PxOrange)) else SolidColor(PxLine),
+                                ),
+                        )
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Close session", color = PxRed) },
+                                onClick = {
+                                    menu = false
+                                    controller.closeTab(tab.id)
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
         Box(
-            Modifier.size(26.dp).clip(RoundedCornerShape(13.dp)).background(PxRed),
+            Modifier.size(width = 52.dp, height = 40.dp).clickable { controller.newTab() },
             contentAlignment = Alignment.Center,
-        ) { Text(">_", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace) }
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                buildAnnotatedString {
-                    withStyle(SpanStyle(color = Color.White)) { append("Pay") }
-                    withStyle(SpanStyle(color = PxRed)) { append("Nux") }
-                },
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-            )
-            Text(
-                if (controller.ended) "Session ended" else "Ubuntu · PRoot",
-                color = PxMuted,
-                fontSize = 10.sp,
-            )
-        }
-        IconButton(onClick = { controller.copyScreen() }, modifier = Modifier.size(42.dp)) {
-            Icon(Icons.Default.ContentCopy, "Copy", tint = Color.White, modifier = Modifier.size(20.dp))
-        }
-        IconButton(onClick = { controller.paste() }, modifier = Modifier.size(42.dp)) {
-            Icon(Icons.Default.ContentPaste, "Paste", tint = Color.White, modifier = Modifier.size(20.dp))
-        }
-        IconButton(onClick = { controller.showKeyboard() }, modifier = Modifier.size(42.dp)) {
-            Icon(Icons.Default.Keyboard, "Keyboard", tint = Color.White, modifier = Modifier.size(20.dp))
-        }
-        IconButton(
-            onClick = { scope.launch { controller.restart() } },
-            modifier = Modifier.size(42.dp),
-        ) {
-            Icon(Icons.Default.Refresh, "New session", tint = if (controller.ended) PxRed else Color.White, modifier = Modifier.size(20.dp))
-        }
+        ) { Text("+", color = PxOrange, fontSize = 26.sp, fontWeight = FontWeight.Medium) }
     }
 }
 
 @Composable
 private fun PaynuxExtraKeys(controller: PaynuxTerminalController) {
-    Column(Modifier.fillMaxWidth().background(PxBg).padding(horizontal = 4.dp, vertical = 3.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            ExtraKey("ESC") { controller.sendKey(KeyEvent.KEYCODE_ESCAPE) }
-            ExtraKey("/") { controller.sendChar('/') }
-            ExtraKey("-") { controller.sendChar('-') }
-            ExtraKey("HOME") { controller.sendKey(KeyEvent.KEYCODE_MOVE_HOME) }
-            ExtraKey("↑") { controller.sendKey(KeyEvent.KEYCODE_DPAD_UP) }
-            ExtraKey("END") { controller.sendKey(KeyEvent.KEYCODE_MOVE_END) }
-            ExtraKey("PGUP") { controller.sendKey(KeyEvent.KEYCODE_PAGE_UP) }
+    val pager = rememberPagerState(pageCount = { 2 })
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 6.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .border(1.dp, Color(0xFF2B3440), RoundedCornerShape(14.dp))
+            .background(PxPanel)
+            .padding(6.dp),
+    ) {
+        HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth()) { page ->
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (page == 0) {
+                    KeyRow {
+                        ExtraKey("ESC") { controller.sendKey(KeyEvent.KEYCODE_ESCAPE) }
+                        ExtraKey("TAB") { controller.sendKey(KeyEvent.KEYCODE_TAB) }
+                        ExtraKey("HOME") { controller.sendKey(KeyEvent.KEYCODE_MOVE_HOME) }
+                        ExtraKey("↑") { controller.sendKey(KeyEvent.KEYCODE_DPAD_UP) }
+                        ExtraKey("END") { controller.sendKey(KeyEvent.KEYCODE_MOVE_END) }
+                        ExtraKey("PGUP") { controller.sendKey(KeyEvent.KEYCODE_PAGE_UP) }
+                    }
+                    KeyRow {
+                        ExtraKey("CTRL", active = controller.ctrl) { controller.ctrl = !controller.ctrl }
+                        ExtraKey("ALT", active = controller.alt) { controller.alt = !controller.alt }
+                        ExtraKey("←") { controller.sendKey(KeyEvent.KEYCODE_DPAD_LEFT) }
+                        ExtraKey("↓") { controller.sendKey(KeyEvent.KEYCODE_DPAD_DOWN) }
+                        ExtraKey("→") { controller.sendKey(KeyEvent.KEYCODE_DPAD_RIGHT) }
+                        ExtraKey("PGDN") { controller.sendKey(KeyEvent.KEYCODE_PAGE_DOWN) }
+                    }
+                } else {
+                    KeyRow { "/-|~_:".forEach { c -> ExtraKey(c.toString()) { controller.sendChar(c) } } }
+                    KeyRow { "\\$=\"'*".forEach { c -> ExtraKey(c.toString()) { controller.sendChar(c) } } }
+                }
+            }
         }
-        Spacer(Modifier.height(3.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            ExtraKey("TAB") { controller.sendKey(KeyEvent.KEYCODE_TAB) }
-            ExtraKey("CTRL", active = controller.ctrl) { controller.ctrl = !controller.ctrl }
-            ExtraKey("ALT", active = controller.alt) { controller.alt = !controller.alt }
-            ExtraKey("←") { controller.sendKey(KeyEvent.KEYCODE_DPAD_LEFT) }
-            ExtraKey("↓") { controller.sendKey(KeyEvent.KEYCODE_DPAD_DOWN) }
-            ExtraKey("→") { controller.sendKey(KeyEvent.KEYCODE_DPAD_RIGHT) }
-            ExtraKey("PGDN") { controller.sendKey(KeyEvent.KEYCODE_PAGE_DOWN) }
+        Row(
+            Modifier.fillMaxWidth().padding(top = 5.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            repeat(2) { index ->
+                val on = pager.currentPage == index
+                Box(
+                    Modifier
+                        .padding(horizontal = 3.dp)
+                        .size(width = if (on) 16.dp else 7.dp, height = 7.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(if (on) PxOrange else PxLine),
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun KeyRow(content: @Composable RowScope.() -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), content = content)
 }
 
 @Composable
@@ -346,14 +576,56 @@ private fun RowScope.ExtraKey(label: String, active: Boolean = false, onClick: (
     Box(
         Modifier
             .weight(1f)
-            .height(38.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (active) PxRed else PxKey)
+            .height(40.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (active) PxOrange else PxKey)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium, fontFamily = FontFamily.Monospace)
+        Text(
+            label,
+            color = if (active) Color.Black else Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            fontFamily = FontFamily.Monospace,
+        )
     }
+}
+
+@Composable
+private fun PaynuxHistoryDialog(controller: PaynuxTerminalController, onDismiss: () -> Unit) {
+    val logs = remember { controller.listLogs() }
+    val format = remember { SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = PxPanel,
+        titleContentColor = Color.White,
+        textContentColor = PxMuted,
+        title = { Text("Saved logs") },
+        text = {
+            if (logs.isEmpty()) {
+                Text("No saved logs yet. A log is saved when you clear the screen or close a session.")
+            } else {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    logs.forEach { file ->
+                        Text(
+                            "${format.format(Date(file.lastModified()))} · ${(file.length() / 1024).coerceAtLeast(1)} KB",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    controller.loadLog(file)
+                                    onDismiss()
+                                }
+                                .padding(vertical = 12.dp),
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close", color = PxOrange) } },
+    )
 }
 
 private fun hasAllFilesAccess(context: Context): Boolean =
