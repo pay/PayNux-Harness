@@ -32,6 +32,13 @@ data class InstalledRuntime(
     val rootfs: File,
 )
 
+data class InteractiveShellLaunch(
+    val executable: String,
+    val args: List<String>,
+    val env: List<String>,
+    val cwd: String,
+)
+
 data class RuntimeInstallProgress(
     val message: String,
     val fraction: Float,
@@ -1633,6 +1640,93 @@ class RuntimeInstaller(private val context: Context) {
             ptyRows = ptyRows,
             ptyColumns = ptyColumns,
         )
+    }
+
+    /**
+     * Launch spec for the bottom-bar PayNux terminal: an interactive login-style bash inside
+     * PRoot, started in /root (not pinned to /workspace) with extra host paths bound in.
+     * Does not alter [process], which the agents and project terminals keep using.
+     */
+    fun interactiveShellLaunch(): InteractiveShellLaunch {
+        check(ensureRootfsCompatibilityLinks()) { "Core runtime has an invalid Linux filesystem layout" }
+        val runtime = installedRuntime()
+        val terminalWorkspace = File(context.filesDir, "workspaces/terminal").apply { mkdirs() }
+        File(rootfs, "workspace").mkdirs()
+        File(rootfs, "root").mkdirs()
+        writeAndroidGradleConfiguration(rootfs)
+        ensureWorkspaceTrust("/workspace")
+        val bridge = File(context.filesDir, "runtime-bridge").apply { mkdirs() }
+        File(bridge, "paynux-terminal.bashrc").writeText(
+            listOf(
+                "[ -f /etc/bash.bashrc ] && . /etc/bash.bashrc",
+                "[ -f \"\$HOME/.bashrc\" ] && . \"\$HOME/.bashrc\"",
+                "export PS1='\\[\\e[1;31m\\]root\\[\\e[0;37m\\]@\\[\\e[1;31m\\]paynux\\[\\e[0m\\]:\\[\\e[1;37m\\]\\w\\[\\e[0m\\]\\$ '",
+                "alias ls='ls --color=auto'",
+                "alias ll='ls -lah --color=auto'",
+                "",
+            ).joinToString("\n"),
+        )
+        val appDataDir = context.filesDir.parentFile
+        val binds = buildList<Pair<String, String>> {
+            add("/dev" to "/dev")
+            add("/proc" to "/proc")
+            add("/sys" to "/sys")
+            listOf("/system", "/apex", "/vendor", "/product").forEach { if (File(it).exists()) add(it to it) }
+            add(terminalWorkspace.absolutePath to "/workspace")
+            add(File(context.filesDir, "workspaces").absolutePath to "/projects")
+            add(bridge.absolutePath to "/pocket-bridge")
+            // Wider host access: app data dir (same absolute path as Android sees it),
+            // shared storage and /data/local/tmp. Paths the OS denies simply stay empty.
+            if (appDataDir != null) add(appDataDir.absolutePath to appDataDir.absolutePath)
+            if (File("/storage").exists()) add("/storage" to "/storage")
+            if (File("/storage/emulated/0").exists()) add("/storage/emulated/0" to "/sdcard")
+            if (File("/data/local/tmp").exists()) add("/data/local/tmp" to "/data/local/tmp")
+        }
+        val args = buildList {
+            add(runtime.proot.absolutePath)
+            add("--link2symlink")
+            add("-0")
+            add("-r")
+            add(rootfs.absolutePath)
+            binds.forEach { (host, guest) ->
+                File(rootfs, guest.removePrefix("/")).mkdirs()
+                add("-b")
+                add(if (host == guest) host else "$host:$guest")
+            }
+            add("-w")
+            add("/root")
+            addAll(listOf("/usr/bin/bash", "--rcfile", "/pocket-bridge/paynux-terminal.bashrc", "-i"))
+        }
+        val prootTemp = File(context.cacheDir, "proot-tmp").apply { mkdirs() }
+        val env = buildMap {
+            put("HOME", "/root")
+            put("USER", "root")
+            val androidReady = File(rootfs, "root/.pocket-android-tools-version").readTextOrNull() == ANDROID_TOOLS_VERSION
+            val basePath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+            if (androidReady) {
+                put("ANDROID_HOME", "/root/android-sdk")
+                put("ANDROID_SDK_ROOT", "/root/android-sdk")
+                put("GRADLE_HOME", "/opt/gradle/gradle-8.14.3")
+                put("GRADLE_USER_HOME", "/root/.gradle")
+                put("ORG_GRADLE_PROJECT_android.aapt2FromMavenOverride", "/root/android-sdk/build-tools/35.0.0/aapt2")
+                put("PATH", "/opt/gradle/gradle-8.14.3/bin:/root/android-sdk/build-tools/35.0.0:/root/android-sdk/cmdline-tools/latest/bin:$basePath")
+            } else {
+                put("PATH", basePath)
+            }
+            put("LANG", "C.UTF-8")
+            put("TERM", "xterm-256color")
+            put("COLORTERM", "truecolor")
+            put("LD_LIBRARY_PATH", context.applicationInfo.nativeLibraryDir)
+            put("PROOT_NO_SECCOMP", "1")
+            put("PROOT_TMP_DIR", prootTemp.absolutePath)
+            put("PROOT_LOADER", File(context.applicationInfo.nativeLibraryDir, "libprootloader.so").absolutePath)
+            put("GLIBC_TUNABLES", "glibc.pthread.rseq=0")
+            if (hasNativeAddonToolchain(rootfs)) {
+                put("CC", "/usr/bin/gcc-10")
+                put("CXX", "/usr/bin/g++-10")
+            }
+        }.map { "${it.key}=${it.value}" }
+        return InteractiveShellLaunch(runtime.proot.absolutePath, args, env, context.filesDir.absolutePath)
     }
 
     fun ensureSettingsAndHooks() {

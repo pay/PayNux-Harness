@@ -2571,31 +2571,7 @@ private fun RootScreenHost(
                     onSetAntigravityModel = viewModel::setAntigravityModel,
                     onSetAntigravityEffort = viewModel::setAntigravityEffort,
                 )
-                RootScreen.TERMINAL -> TerminalScreen(
-                    lines = terminalLines,
-                    isRunning = isTerminalRunning,
-                    onRun = viewModel::runTerminalCommand,
-                    onInput = viewModel::sendTerminalInput,
-                    onInterrupt = viewModel::interruptTerminalCommand,
-                    onClear = viewModel::clearTerminal,
-                    onToggleTheme = viewModel::toggleTheme,
-                    themeMode = state.themeMode,
-                    title = "PayNux Terminal",
-                    subtitle = "Bash · PRoot Runtime",
-                    liveOutput = terminalLiveOutput,
-                    currentCommand = terminalCurrentCommand,
-                    showQuickCommands = true,
-                    showThemeAction = false,
-                    promptLabel = "paynux",
-                    showRuntimeStatus = true,
-                    showExecuteButton = true,
-                    draftInput = terminalDraftInput,
-                    onDraftInputChange = { terminalDraftInput = it },
-                    draftHistory = terminalDraftHistory,
-                    onDraftHistoryChange = { terminalDraftHistory = it },
-                    draftHistoryIndex = terminalDraftHistoryIndex,
-                    onDraftHistoryIndexChange = { terminalDraftHistoryIndex = it },
-                )
+                RootScreen.TERMINAL -> PaynuxTerminalScreen(viewModel.paynuxTerminal)
                 RootScreen.SETTINGS -> SettingsScreen(
                     state = state,
                     showBackupDot = !state.backupFeatureSeen,

@@ -438,6 +438,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
     @Volatile private var projectTerminalProcess: Process? = null
     @Volatile private var terminalProcess: Process? = null
+    private val paynuxTerminalLazy = lazy { PaynuxTerminalController(getApplication(), installer) }
+    val paynuxTerminal: PaynuxTerminalController get() = paynuxTerminalLazy.value
     @Volatile private var projectTerminalProjectId: String? = null
     @Volatile private var projectTerminalStopRequested: Boolean = false
     @Volatile private var androidBuildProcess: Process? = null
@@ -5403,6 +5405,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     override fun onCleared() {
+        if (paynuxTerminalLazy.isInitialized()) paynuxTerminalLazy.value.shutdown()
         stopAndroidLogcat()
         super.onCleared()
     }

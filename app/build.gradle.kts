@@ -7,6 +7,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val terminalEmulator16kAar = layout.buildDirectory.file(
+    "generated/termux/terminal-emulator-16k.aar"
+).get().asFile
+
+
 val testSecrets = Properties().apply {
     val secretsFile = rootProject.file("test-secrets.properties")
     if (secretsFile.isFile) secretsFile.inputStream().use(::load)
@@ -209,6 +214,17 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.apache.commons:commons-compress:1.27.1")
     implementation("com.github.luben:zstd-jni:1.5.7-12@aar")
+    // Interactive PayNux-style terminal (bottom-bar Terminal tab only).
+    implementation("com.github.termux.termux-app:terminal-view:v0.118.0") {
+        exclude(group = "com.github.termux.termux-app", module = "terminal-emulator")
+    }
+    // GitHub Actions generates this patched AAR before Gradle configuration.
+    // Local builds fall back to the pinned upstream JitPack artifact.
+    if (terminalEmulator16kAar.isFile) {
+        implementation(files(terminalEmulator16kAar))
+    } else {
+        implementation("com.github.termux.termux-app:terminal-emulator:v0.118.0")
+    }
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20250107")
