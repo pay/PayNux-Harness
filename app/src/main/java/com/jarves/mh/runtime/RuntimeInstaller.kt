@@ -1694,7 +1694,7 @@ class RuntimeInstaller(private val context: Context) {
             listOf(
                 "[ -f /etc/bash.bashrc ] && . /etc/bash.bashrc",
                 "[ -f \"\$HOME/.bashrc\" ] && . \"\$HOME/.bashrc\"",
-                "export PS1='\\[\\e[1;31m\\]root\\[\\e[0;37m\\]@\\[\\e[1;31m\\]paynux\\[\\e[0m\\]:\\[\\e[1;37m\\]\\w\\[\\e[0m\\]\\$ '",
+                "export PS1='\\[\\e[1;38;2;220;38;38m\\]root\\[\\e[1;38;2;244;138;79m\\]@paynux\\[\\e[0;37m\\]:\\[\\e[1;37m\\]\\w\\[\\e[0m\\]\\$ '",
                 "alias ls='ls --color=auto'",
                 "alias ll='ls -lah --color=auto'",
                 "",

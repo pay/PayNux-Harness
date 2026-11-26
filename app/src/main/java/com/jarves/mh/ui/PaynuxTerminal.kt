@@ -70,6 +70,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -423,19 +424,21 @@ fun PaynuxTerminalScreen(controller: PaynuxTerminalController) {
 @Composable
 private fun PaynuxToolbar(controller: PaynuxTerminalController, imeVisible: Boolean, onHistory: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 10.dp),
+        Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(
             buildAnnotatedString {
                 withStyle(SpanStyle(color = PxOrange)) { append("> ") }
-                withStyle(SpanStyle(color = PxRed)) { append("Ubuntu") }
+                withStyle(SpanStyle(color = Color.White)) { append("Chris Pay") }
+                withStyle(SpanStyle(color = PxRed)) { append("Nux") }
             },
             fontWeight = FontWeight.Bold,
-            fontSize = 20.sp,
-            fontFamily = FontFamily.Monospace,
+            fontSize = 16.sp,
             maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         CircleButton(Icons.Default.History, "Saved logs", PxCircle, Color.White, onHistory)
@@ -450,17 +453,17 @@ private fun PaynuxToolbar(controller: PaynuxTerminalController, imeVisible: Bool
 @Composable
 private fun CircleButton(icon: ImageVector, description: String, background: Color, tint: Color, onClick: () -> Unit) {
     Box(
-        Modifier.size(36.dp).clip(CircleShape).background(background).clickable(onClick = onClick),
+        Modifier.size(32.dp).clip(CircleShape).background(background).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, description, tint = tint, modifier = Modifier.size(19.dp))
+        Icon(icon, description, tint = tint, modifier = Modifier.size(17.dp))
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PaynuxTabs(controller: PaynuxTerminalController) {
-    Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().height(34.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
             controller.tabs.forEach { tab ->
                 key(tab.id) {
@@ -468,24 +471,16 @@ private fun PaynuxTabs(controller: PaynuxTerminalController) {
                     var menu by remember { mutableStateOf(false) }
                     Box(
                         Modifier
-                            .width(64.dp)
-                            .height(40.dp)
+                            .width(40.dp)
+                            .height(34.dp)
                             .combinedClickable(onClick = { controller.selectTab(tab.id) }, onLongClick = { menu = true }),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            tab.id.toString(),
-                            color = if (active) Color.White else PxMuted,
-                            fontSize = 15.sp,
-                            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                        )
                         Box(
                             Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(horizontal = 8.dp)
-                                .fillMaxWidth()
-                                .height(3.dp)
-                                .clip(RoundedCornerShape(2.dp))
+                                .width(26.dp)
+                                .height(5.dp)
+                                .clip(RoundedCornerShape(3.dp))
                                 .background(
                                     brush = if (active) Brush.horizontalGradient(listOf(PxRed, PxOrange)) else SolidColor(PxLine),
                                 ),
@@ -504,9 +499,9 @@ private fun PaynuxTabs(controller: PaynuxTerminalController) {
             }
         }
         Box(
-            Modifier.size(width = 52.dp, height = 40.dp).clickable { controller.newTab() },
+            Modifier.size(width = 40.dp, height = 34.dp).clickable { controller.newTab() },
             contentAlignment = Alignment.Center,
-        ) { Text("+", color = PxOrange, fontSize = 26.sp, fontWeight = FontWeight.Medium) }
+        ) { Text("+", color = PxOrange, fontSize = 20.sp, fontWeight = FontWeight.Medium) }
     }
 }
 
