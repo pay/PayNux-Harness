@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - main
-      - feature/paynux-terminal-tab
 
 permissions:
   contents: read
@@ -13,6 +12,8 @@ permissions:
 jobs:
   online-debug:
     name: Build Online Debug APK
+    # Production signing secrets are only available to trusted main-branch code.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
