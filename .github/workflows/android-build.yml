@@ -13,7 +13,7 @@ jobs:
   online-debug:
     name: Build Online Debug APK
     # Production signing secrets are only available to trusted main-branch code.
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feature/paynux-terminal-tab')
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
