@@ -15,6 +15,14 @@ PayNux Harness may handle the following information when you choose to provide i
 - Basic device compatibility information such as Android version, processor architecture, memory, and available storage
 
 ## Local storage
+The interactive Linux terminal runs commands locally inside the app's PRoot environment.
+To support file work outside the app sandbox, the terminal can expose shared device storage
+and selected Android filesystem paths to that environment. On Android versions that support
+it, access to shared storage may require the user to grant the app the system **All files
+access** special permission. The terminal also has access to app-private paths explicitly
+mounted into its environment. Files reachable from the terminal can be read, changed, or
+deleted by commands run there. Only run commands and install packages from sources you trust.
+
 
 Projects, conversations, attachments, runtime files, terminal history, and diagnostics are stored in the app's private storage on your device. Provider API keys are encrypted using a key managed by Android Keystore before they are persisted.
 
