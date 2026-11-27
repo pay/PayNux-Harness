@@ -58,4 +58,4 @@ This policy may be updated as PayNux Harness changes. Material changes will be r
 
 ## Contact
 
-For privacy questions or requests, open an issue at [github.com/techjarves/Mobile-Harness/issues](https://github.com/techjarves/Mobile-Harness/issues).
+For privacy questions or requests, open an issue at [github.com/pay/PayNux-Harness/issues](https://github.com/pay/PayNux-Harness/issues).

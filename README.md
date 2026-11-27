@@ -12,7 +12,7 @@
 
   <br />
 
-  [![Latest release](https://img.shields.io/github/v/release/techjarves/Mobile-Harness?label=Release&color=F28C52&style=flat-square&logo=github&logoColor=white)](https://github.com/techjarves/Mobile-Harness/releases/latest)
+  [![Latest release](https://img.shields.io/github/v/release/pay/PayNux-Harness?label=Release&color=F28C52&style=flat-square&logo=github&logoColor=white)](https://github.com/pay/PayNux-Harness/releases/latest)
   [![Android 9+](https://img.shields.io/badge/Android-9%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](#system-requirements)
   [![ARM64](https://img.shields.io/badge/CPU-ARM64-5B8DEF?style=flat-square)](#system-requirements)
   [![MIT License](https://img.shields.io/badge/License-MIT-8B7CF6?style=flat-square&logo=opensourceinitiative&logoColor=white)](LICENSE)
@@ -20,7 +20,7 @@
 
   <br />
 
-  [**Download Online APK**](https://github.com/techjarves/Mobile-Harness/releases/latest/download/mobile-harness-online.apk) &nbsp;•&nbsp;
+  [**Download Online APK**](https://github.com/pay/PayNux-Harness/releases/latest/download/paynux-harness-online.apk) &nbsp;•&nbsp;
   [**Watch Walkthrough (3 min)**](https://youtu.be/QzAau52Z7yQ) &nbsp;•&nbsp;
   [**Quickstart Guide**](#quickstart) &nbsp;•&nbsp;
   [**Architecture**](#architecture) &nbsp;•&nbsp;
@@ -53,8 +53,8 @@
 ## Download PayNux Harness
 
 <div align="center">
-  <p><strong>89.1 MB</strong> · Core, Python, and Android runtime bundles are downloaded only when needed. Supports secure in-app updates.</p>
-  <a href="https://github.com/techjarves/Mobile-Harness/releases/latest/download/mobile-harness-online.apk">
+  <p>Core, Python, and Android runtime bundles are downloaded only when needed. Supports secure in-app updates.</p>
+  <a href="https://github.com/pay/PayNux-Harness/releases/latest/download/paynux-harness-online.apk">
     <img src="https://img.shields.io/badge/Download-Online_APK-F28C52?style=for-the-badge&logo=android&logoColor=white" alt="Download Online APK" />
   </a>
 </div>
@@ -148,7 +148,7 @@ PayNux Harness unites modern **Jetpack Compose UI** with a self-contained **Ubun
 Get up and running in 3 guided steps:
 
 ### 1. Download & Install
-Download the latest signed release APK from [GitHub Releases](https://github.com/techjarves/Mobile-Harness/releases/latest).
+Download the latest signed release APK from [GitHub Releases](https://github.com/pay/PayNux-Harness/releases/latest).
 
 ```text
 Target Architecture : ARM64 (arm64-v8a)
@@ -305,7 +305,7 @@ flowchart TB
 ```bash
 # Clone the repository
 git clone https://github.com/pay/PayNux-Harness.git
-cd Mobile-Harness
+cd PayNux-Harness
 
 # Build the standard ARM64 debug binary
 ./gradlew assembleDebug
