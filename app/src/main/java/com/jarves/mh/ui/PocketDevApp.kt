@@ -192,6 +192,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.TextRange
@@ -610,7 +612,7 @@ private fun InitialLanguageSetupScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         BrandMark(compact = true)
                         Spacer(Modifier.width(9.dp))
-                        Text("PayNux Harness", fontWeight = FontWeight.Bold)
+                        PaynuxWordmark()
                     }
                 },
                 actions = {
@@ -902,7 +904,7 @@ private fun BackgroundTaskSetupScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         BrandMark(compact = true)
                         Spacer(Modifier.width(9.dp))
-                        Text("PayNux Harness", fontWeight = FontWeight.Bold)
+                        PaynuxWordmark()
                     }
                 },
                 actions = {
@@ -1178,7 +1180,7 @@ private fun RuntimeSetupPromptScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         BrandMark(compact = true)
                         Spacer(Modifier.width(9.dp))
-                        Text("PayNux Harness", fontWeight = FontWeight.Bold)
+                        PaynuxWordmark()
                     }
                 },
                 navigationIcon = {
@@ -2398,7 +2400,7 @@ private fun StartupErrorScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         BrandMark(compact = true)
                         Spacer(Modifier.width(9.dp))
-                        Text("PayNux Harness", fontWeight = FontWeight.Bold)
+                        PaynuxWordmark()
                     }
                 },
                 actions = {
@@ -2506,7 +2508,18 @@ private fun RootScreenHost(
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            if (!keyboardVisible) NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+            if (!keyboardVisible) Column {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(com.jarves.mh.ui.theme.PayNuxRed, com.jarves.mh.ui.theme.PayNuxOrange),
+                            ),
+                        ),
+                )
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                 RootScreen.entries.forEach { tab ->
                     NavigationBarItem(
                         selected = screen == tab,
@@ -2524,6 +2537,7 @@ private fun RootScreenHost(
                         ),
                     )
                 }
+            }
             }
         },
     ) { padding ->
@@ -3537,7 +3551,7 @@ private fun ProjectsScreen(
         topBar = {
             TopAppBar(
                 modifier = Modifier.padding(top = 8.dp),
-                title = { Row(verticalAlignment = Alignment.CenterVertically) { BrandMark(compact = true); Spacer(Modifier.width(9.dp)); Text("PayNux Harness", fontWeight = FontWeight.Bold) } },
+                title = { Row(verticalAlignment = Alignment.CenterVertically) { BrandMark(compact = true); Spacer(Modifier.width(9.dp)); PaynuxWordmark() } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
@@ -3559,8 +3573,18 @@ private fun ProjectsScreen(
                 ) {
                     Button(
                         onClick = onCreateQuickProject,
-                        modifier = Modifier.weight(1f).height(48.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(com.jarves.mh.ui.theme.PayNuxRed, com.jarves.mh.ui.theme.PayNuxOrange),
+                                ),
+                            ),
                         shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color.White),
+                        elevation = null,
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                     ) {
                         Icon(
@@ -4653,7 +4677,18 @@ private fun WorkspaceScreen(
             )
         },
         bottomBar = {
-            if (!keyboardVisible) NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+            if (!keyboardVisible) Column {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(com.jarves.mh.ui.theme.PayNuxRed, com.jarves.mh.ui.theme.PayNuxOrange),
+                            ),
+                        ),
+                )
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                 WorkspaceTab.entries.filter { it != WorkspaceTab.CHANGES }.forEach { tab ->
                     NavigationBarItem(
                         selected = selectedTab == tab,
@@ -4671,6 +4706,7 @@ private fun WorkspaceScreen(
                         ),
                     )
                 }
+            }
             }
         },
     ) { padding ->
@@ -7364,5 +7400,21 @@ private fun BrandMark(modifier: Modifier = Modifier, compact: Boolean = false) {
         painter = painterResource(R.drawable.paynux_mark),
         contentDescription = "PayNux Harness",
         modifier = modifier.size(size),
+    )
+}
+
+
+/** "PayNux Harness" with the PayNux red on "Nux". */
+@Composable
+private fun PaynuxWordmark() {
+    Text(
+        androidx.compose.ui.text.buildAnnotatedString {
+            append("Pay")
+            pushStyle(androidx.compose.ui.text.SpanStyle(color = com.jarves.mh.ui.theme.PayNuxRed))
+            append("Nux")
+            pop()
+            append(" Harness")
+        },
+        fontWeight = FontWeight.Bold,
     )
 }
