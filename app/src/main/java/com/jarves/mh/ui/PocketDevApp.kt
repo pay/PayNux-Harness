@@ -268,6 +268,7 @@ import com.jarves.mh.network.GitHubRepository
 import com.jarves.mh.ui.theme.PocketBlue
 import com.jarves.mh.ui.theme.PocketGreen
 import com.jarves.mh.ui.theme.PocketOrange
+import com.jarves.mh.ui.theme.paynuxGradient
 import java.io.ByteArrayInputStream
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -2527,7 +2528,13 @@ private fun RootScreenHost(
                         icon = {
                             BadgedBox(
                                 badge = { if (tab == RootScreen.SETTINGS && !state.backupFeatureSeen) Badge() },
-                            ) { Icon(tab.icon, contentDescription = stringResource(tab.labelRes)) }
+                            ) {
+                                Icon(
+                                    tab.icon,
+                                    contentDescription = stringResource(tab.labelRes),
+                                    modifier = if (screen == tab) Modifier.paynuxGradient() else Modifier,
+                                )
+                            }
                         },
                         label = { Text(stringResource(tab.labelRes), fontSize = 11.sp) },
                         colors = NavigationBarItemDefaults.colors(
@@ -4161,7 +4168,7 @@ private fun ProjectCard(
                 Icon(
                     if (project.type == ProjectType.ANDROID) Icons.Default.Android else Icons.Default.Folder,
                     null,
-                    Modifier.padding(13.dp),
+                    if (project.type == ProjectType.ANDROID) Modifier.padding(13.dp) else Modifier.padding(13.dp).paynuxGradient(),
                     tint = if (project.type == ProjectType.ANDROID) PocketGreen else PocketOrange,
                 )
             }

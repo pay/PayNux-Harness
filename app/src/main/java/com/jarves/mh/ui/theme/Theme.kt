@@ -7,7 +7,14 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
@@ -84,3 +91,18 @@ fun PocketTheme(themeMode: AppThemeMode = AppThemeMode.SYSTEM, content: @Composa
         content = content,
     )
 }
+
+/** Tints an icon (or any alpha-shaped content) with the PayNux red-to-orange gradient. */
+fun Modifier.paynuxGradient(): Modifier = this
+    .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+    .drawWithCache {
+        val brush = Brush.linearGradient(
+            colors = listOf(PayNuxRed, PayNuxOrange),
+            start = Offset.Zero,
+            end = Offset(size.width, size.height),
+        )
+        onDrawWithContent {
+            drawContent()
+            drawRect(brush = brush, blendMode = BlendMode.SrcIn)
+        }
+    }
