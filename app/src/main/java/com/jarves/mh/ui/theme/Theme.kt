@@ -7,23 +7,36 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-val PocketOrange = Color(0xFFF28C52)
+/** PayNux red-orange accent (the app's primary colour). */
+val PocketOrange = Color(0xFFF26A38)
+val PayNuxRed = Color(0xFFDC2626)
+val PayNuxOrange = Color(0xFFF48A4F)
+
+/** PayNux Harness is dark-only: the day/night switch is hidden and the theme is always dark. */
+const val THEME_SWITCH_ENABLED = false
 val PocketBlue = Color(0xFF8EA8FF)
 val PocketGreen = Color(0xFF69D69E)
-val PocketBackground = Color(0xFF0B0E14)
+val PocketBackground = Color(0xFF0B0F14)
 val PocketSurface = Color(0xFF131821)
 val PocketSurfaceVariant = Color(0xFF1B222D)
 val PocketOutline = Color(0xFF2A3240)
 
 private val DarkColors = darkColorScheme(
     primary = PocketOrange,
-    onPrimary = Color(0xFF241107),
-    primaryContainer = Color(0xFF42281D),
-    onPrimaryContainer = Color(0xFFFFDDCC),
+    onPrimary = Color(0xFF240A05),
+    primaryContainer = Color(0xFF3A1814),
+    onPrimaryContainer = Color(0xFFFFDAD1),
     secondary = PocketBlue,
     onSecondary = Color(0xFF001F58),
     tertiary = PocketGreen,
@@ -61,11 +74,7 @@ enum class AppThemeMode { SYSTEM, DARK, LIGHT }
 
 @Composable
 fun PocketTheme(themeMode: AppThemeMode = AppThemeMode.SYSTEM, content: @Composable () -> Unit) {
-    val isDark = when (themeMode) {
-        AppThemeMode.DARK -> true
-        AppThemeMode.LIGHT -> false
-        AppThemeMode.SYSTEM -> isSystemInDarkTheme()
-    }
+    val isDark = true // PayNux Harness is dark-only (themeMode is kept for compatibility)
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -82,3 +91,18 @@ fun PocketTheme(themeMode: AppThemeMode = AppThemeMode.SYSTEM, content: @Composa
         content = content,
     )
 }
+
+/** Tints an icon (or any alpha-shaped content) with the PayNux red-to-orange gradient. */
+fun Modifier.paynuxGradient(): Modifier = this
+    .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+    .drawWithCache {
+        val brush = Brush.linearGradient(
+            colors = listOf(PayNuxRed, PayNuxOrange),
+            start = Offset.Zero,
+            end = Offset(size.width, size.height),
+        )
+        onDrawWithContent {
+            drawContent()
+            drawRect(brush = brush, blendMode = BlendMode.SrcIn)
+        }
+    }

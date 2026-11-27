@@ -74,7 +74,7 @@ object RuntimeSetupController {
     @Synchronized
     fun begin(context: Context) {
         val previous = mutableSnapshot.value.logs
-        val logs = (previous + "— Resuming Mobile Harness setup —").takeLast(MAX_LOG_LINES)
+        val logs = (previous + "— Resuming PayNux Harness setup —").takeLast(MAX_LOG_LINES)
         set(
             context,
             RuntimeSetupSnapshot(
@@ -356,7 +356,7 @@ class RuntimeSetupService : Service() {
     private fun acquireWakeLock() {
         if (wakeLock?.isHeld == true) return
         wakeLock = getSystemService(PowerManager::class.java)
-            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "com.jarves.mh:runtime-setup")
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "com.paynux.harness:runtime-setup")
             .apply { acquire(MAX_WAKE_LOCK_MS) }
     }
 
@@ -374,8 +374,8 @@ class RuntimeSetupService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
-        const val ACTION_START = "com.jarves.mh.START_SETUP"
-        const val ACTION_STOP = "com.jarves.mh.STOP_SETUP"
+        const val ACTION_START = "com.paynux.harness.START_SETUP"
+        const val ACTION_STOP = "com.paynux.harness.STOP_SETUP"
         const val EXTRA_STACKS = "selected_stacks"
         const val EXTRA_AGENT = "selected_agent"
         private const val CHANNEL_ID = "runtime-setup"

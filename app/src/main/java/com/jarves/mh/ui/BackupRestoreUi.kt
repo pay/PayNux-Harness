@@ -445,7 +445,7 @@ private fun restartApp(context: Context) {
 }
 
 private fun defaultBackupName(): String =
-    "MobileHarness-" + SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date()) + ".mhbackup"
+    "PayNuxHarness-" + SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date()) + ".mhbackup"
 
 private fun backupErrorText(context: Context, error: Throwable): String = when (error) {
     is WrongBackupPasswordException -> context.getString(R.string.backup_error_wrong_password)

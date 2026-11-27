@@ -7,6 +7,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val terminalEmulator16kAar = layout.buildDirectory.file(
+    "generated/termux/terminal-emulator-16k.aar"
+).get().asFile
+
+
 val testSecrets = Properties().apply {
     val secretsFile = rootProject.file("test-secrets.properties")
     if (secretsFile.isFile) secretsFile.inputStream().use(::load)
@@ -14,7 +19,7 @@ val testSecrets = Properties().apply {
 val playBuild = providers.gradleProperty("playBuild").orNull?.toBoolean() == true ||
     providers.gradleProperty("playFeasibility").orNull?.toBoolean() == true
 val privacyPolicyUrl = providers.gradleProperty("privacyPolicyUrl").orNull
-    ?: "https://github.com/techjarves/Mobile-Harness/blob/main/PRIVACY.md"
+    ?: "https://github.com/pay/PayNux-Harness/blob/main/PRIVACY.md"
 val uploadStorePath = providers.environmentVariable("MH_UPLOAD_STORE_FILE").orNull
 val uploadStorePassword = providers.environmentVariable("MH_UPLOAD_STORE_PASSWORD").orNull
 val uploadKeyAlias = providers.environmentVariable("MH_UPLOAD_KEY_ALIAS").orNull
@@ -25,10 +30,14 @@ val hasUploadSigning = listOf(
     uploadKeyAlias,
     uploadKeyPassword,
 ).all { !it.isNullOrBlank() }
-val runtimeReleaseBaseUrl =
+val paynuxRelease = providers.gradleProperty("paynuxRelease").orNull?.toBoolean() == true
+val runtimeReleaseBaseUrl = if (paynuxRelease) {
+    "https://github.com/pay/PayNux-Harness/releases/download/paynux-runtime-2026.09.4"
+} else {
     "https://github.com/techjarves/Mobile-Harness/releases/download/runtime-2026.09.4"
+}
 val appUpdateManifestUrl =
-    "https://github.com/techjarves/Mobile-Harness/releases/latest/download/mobile-harness-update.json"
+    "https://github.com/pay/PayNux-Harness/releases/latest/download/mobile-harness-update.json"
 val runtimeBundleDir = rootProject.layout.projectDirectory.dir("dist/runtime-bundles")
 val generatedRuntimeAssets = layout.buildDirectory.dir("generated/runtime-assets")
 
@@ -84,8 +93,8 @@ android {
         targetSdk = if (playBuild) 36 else 28
         // Keep literal defaults so F-Droid's static manifest parser can detect
         // the tagged release. Gradle properties may still override Play builds.
-        versionCode = 11
-        versionName = "1.0.10"
+        versionCode = 12
+        versionName = "1.0.11"
         providers.gradleProperty("appVersionCode").orNull?.toIntOrNull()?.let { versionCode = it }
         providers.gradleProperty("appVersionName").orNull?.let { versionName = it }
 
@@ -127,6 +136,9 @@ android {
 
     buildTypes {
         debug {
+            if (hasUploadSigning) {
+                signingConfig = signingConfigs.getByName("upload")
+            }
             buildConfigField(
                 "String",
                 "TEST_OPENROUTER_API_KEY",
@@ -206,6 +218,17 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.apache.commons:commons-compress:1.27.1")
     implementation("com.github.luben:zstd-jni:1.5.7-12@aar")
+    // Interactive PayNux-style terminal (bottom-bar Terminal tab only).
+    implementation("com.github.termux.termux-app:terminal-view:v0.118.0") {
+        exclude(group = "com.github.termux.termux-app", module = "terminal-emulator")
+    }
+    // GitHub Actions generates this patched AAR before Gradle configuration.
+    // Local builds fall back to the pinned upstream JitPack artifact.
+    if (terminalEmulator16kAar.isFile) {
+        implementation(files(terminalEmulator16kAar))
+    } else {
+        implementation("com.github.termux.termux-app:terminal-emulator:v0.118.0")
+    }
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20250107")

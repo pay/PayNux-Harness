@@ -109,10 +109,10 @@ object AndroidAppInstaller {
         return operationId
     }
 
-    const val ACTION_INSTALL_RESULT = "com.jarves.mh.action.APK_INSTALL_RESULT"
-    const val EXTRA_APK_FINGERPRINT = "com.jarves.mh.extra.APK_FINGERPRINT"
-    const val EXTRA_OPERATION_ID = "com.jarves.mh.extra.OPERATION_ID"
-    const val EXTRA_LAUNCH_AFTER_INSTALL = "com.jarves.mh.extra.LAUNCH_AFTER_INSTALL"
+    const val ACTION_INSTALL_RESULT = "com.paynux.harness.action.APK_INSTALL_RESULT"
+    const val EXTRA_APK_FINGERPRINT = "com.paynux.harness.extra.APK_FINGERPRINT"
+    const val EXTRA_OPERATION_ID = "com.paynux.harness.extra.OPERATION_ID"
+    const val EXTRA_LAUNCH_AFTER_INSTALL = "com.paynux.harness.extra.LAUNCH_AFTER_INSTALL"
 
     internal fun publish(event: AndroidInstallEvent) {
         _events.tryEmit(event)

@@ -12,6 +12,8 @@ permissions:
 jobs:
   online-debug:
     name: Build Online Debug APK
+    # Production signing secrets are only available to trusted main-branch code.
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feature/paynux-terminal-tab')
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -42,6 +44,97 @@ jobs:
             "ndk;28.2.13676358" \
             "cmake;3.22.1"
 
+      - name: Build patched Termux emulator AAR (16 KB ELF)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TERMUX_TAG="v0.118.0"
+          TERMUX_COMMIT="6e2689f55295fa444be8ac8592c527c2c5ef3253"
+          TERMUX_REPO="https://github.com/termux/termux-app.git"
+
+          NDK="$ANDROID_HOME/ndk/28.2.13676358"
+          TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
+          SRC="$RUNNER_TEMP/termux-app"
+          WORK="$RUNNER_TEMP/termux-aar-work"
+          ORIGINAL_AAR="$RUNNER_TEMP/terminal-emulator-v0.118.0.aar"
+          OUT_AAR="app/build/generated/termux/terminal-emulator-16k.aar"
+
+          git clone --depth 1 --branch "$TERMUX_TAG" "$TERMUX_REPO" "$SRC"
+          ACTUAL_COMMIT="$(git -C "$SRC" rev-parse HEAD)"
+          test "$ACTUAL_COMMIT" = "$TERMUX_COMMIT"
+
+          curl --fail --location --retry 3 \
+            "https://jitpack.io/com/github/termux/termux-app/terminal-emulator/v0.118.0/terminal-emulator-v0.118.0.aar" \
+            --output "$ORIGINAL_AAR"
+
+          EXPECTED_AAR_SHA="41a86008edfa5e6a10cf3bae9d1cc704f96cdee63dd95ea5f6a642977a56c663"
+          echo "$EXPECTED_AAR_SHA  $ORIGINAL_AAR" | sha256sum --check
+
+          mkdir -p "$WORK/unpacked"
+          unzip -q "$ORIGINAL_AAR" -d "$WORK/unpacked"
+
+          test -f "$WORK/unpacked/classes.jar"
+          test -f "$WORK/unpacked/jni/arm64-v8a/libtermux.so"
+
+          CLASSES_SHA_BEFORE="$(sha256sum "$WORK/unpacked/classes.jar" | cut -d' ' -f1)"
+
+          "$TOOLCHAIN/bin/aarch64-linux-android28-clang" \
+            -std=c11 \
+            -Wall -Wextra -Werror \
+            -Os -fPIC -fno-stack-protector \
+            -ffunction-sections -fdata-sections \
+            -shared \
+            -Wl,--gc-sections \
+            -Wl,-z,max-page-size=16384 \
+            -Wl,-soname,libtermux.so \
+            "$SRC/terminal-emulator/src/main/jni/termux.c" \
+            -o "$WORK/libtermux.so"
+
+          READELF="$TOOLCHAIN/bin/llvm-readelf"
+          NM="$TOOLCHAIN/bin/llvm-nm"
+
+          "$READELF" -lW "$WORK/libtermux.so" |
+            awk '/LOAD/ { if ($NF != "0x4000") bad=1; count++ }
+                 END { if (count == 0 || bad) exit 1 }'
+
+          JNI_COUNT="$("$NM" -D --defined-only "$WORK/libtermux.so" |
+            grep -c 'Java_com_termux_terminal_JNI_')"
+          test "$JNI_COUNT" -eq 5
+
+          for SYMBOL in \
+            Java_com_termux_terminal_JNI_close \
+            Java_com_termux_terminal_JNI_createSubprocess \
+            Java_com_termux_terminal_JNI_setPtyUTF8Mode \
+            Java_com_termux_terminal_JNI_setPtyWindowSize \
+            Java_com_termux_terminal_JNI_waitFor
+          do
+            "$NM" -D --defined-only "$WORK/libtermux.so" |
+              grep -Fq "$SYMBOL"
+          done
+
+          install -m 0644 "$WORK/libtermux.so" \
+            "$WORK/unpacked/jni/arm64-v8a/libtermux.so"
+
+          mkdir -p "$(dirname "$OUT_AAR")"
+          cp "$ORIGINAL_AAR" "$OUT_AAR"
+
+          (
+            cd "$WORK/unpacked"
+            zip -q -d "$GITHUB_WORKSPACE/$OUT_AAR" jni/arm64-v8a/libtermux.so
+            zip -q "$GITHUB_WORKSPACE/$OUT_AAR" jni/arm64-v8a/libtermux.so
+          )
+
+          CLASSES_SHA_AFTER="$(unzip -p "$OUT_AAR" classes.jar | sha256sum | cut -d' ' -f1)"
+          test "$CLASSES_SHA_BEFORE" = "$CLASSES_SHA_AFTER"
+
+          unzip -p "$OUT_AAR" jni/arm64-v8a/libtermux.so > "$WORK/verify-libtermux.so"
+          cmp "$WORK/libtermux.so" "$WORK/verify-libtermux.so"
+
+          echo "Patched Termux AAR ready:"
+          sha256sum "$OUT_AAR"
+          "$READELF" -lW "$WORK/verify-libtermux.so"
+
       - name: Download Online runtime bundle
         shell: bash
         run: |
@@ -59,7 +152,46 @@ jobs:
           EXPECTED_SHA="a659ab9188956fc4721ca86fb21b5118e0e489f47a5e02ae6b4f2fb423659d78"
           echo "$EXPECTED_SHA  dist/runtime-bundles/$FILE" | sha256sum --check
 
+      - name: Configure and verify PayNux signing key
+        shell: bash
+        env:
+          MH_UPLOAD_KEYSTORE_BASE64: ${{ secrets.MH_UPLOAD_KEYSTORE_BASE64 }}
+          MH_UPLOAD_STORE_PASSWORD: ${{ secrets.MH_UPLOAD_STORE_PASSWORD }}
+          MH_UPLOAD_KEY_ALIAS: ${{ secrets.MH_UPLOAD_KEY_ALIAS }}
+          MH_UPLOAD_KEY_PASSWORD: ${{ secrets.MH_UPLOAD_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          test -n "$MH_UPLOAD_KEYSTORE_BASE64"
+          test -n "$MH_UPLOAD_STORE_PASSWORD"
+          test -n "$MH_UPLOAD_KEY_ALIAS"
+          test -n "$MH_UPLOAD_KEY_PASSWORD"
+
+          KEYSTORE="$RUNNER_TEMP/paynux-release.jks"
+          printf '%s' "$MH_UPLOAD_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+          chmod 600 "$KEYSTORE"
+
+          ACTUAL_FP="$(keytool -list -v \
+            -keystore "$KEYSTORE" \
+            -storepass:env MH_UPLOAD_STORE_PASSWORD \
+            -alias "$MH_UPLOAD_KEY_ALIAS" |
+            awk '/SHA256:/ {gsub(":", "", $2); print toupper($2); exit}')"
+
+          EXPECTED_FP="48E685FAC5DDDC0979D688972B916DA8A3AD4DA603470332E44321C96241BFDB"
+
+          if [ "$ACTUAL_FP" != "$EXPECTED_FP" ]; then
+            echo "ERROR: Signing certificate fingerprint mismatch."
+            exit 1
+          fi
+
+          echo "PayNux signing certificate verified."
+
       - name: Build Online Debug APK
+        env:
+          MH_UPLOAD_STORE_FILE: ${{ runner.temp }}/paynux-release.jks
+          MH_UPLOAD_STORE_PASSWORD: ${{ secrets.MH_UPLOAD_STORE_PASSWORD }}
+          MH_UPLOAD_KEY_ALIAS: ${{ secrets.MH_UPLOAD_KEY_ALIAS }}
+          MH_UPLOAD_KEY_PASSWORD: ${{ secrets.MH_UPLOAD_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace :app:assembleOnlineDebug
@@ -76,6 +208,53 @@ jobs:
             echo "ERROR: Online Debug APK tidak ditemukan."
             exit 1
           fi
+
+          echo "===== APK ZIP ALIGNMENT: 16 KB ====="
+          ZIPALIGN="$ANDROID_HOME/build-tools/36.0.0/zipalign"
+          "$ZIPALIGN" -c -P 16 -v 4 "$APK"
+
+          echo "===== APK ELF LOAD ALIGNMENT: 16 KB ====="
+          NDK_READELF="$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          SO_AUDIT_DIR="$RUNNER_TEMP/apk-so-audit"
+          mkdir -p "$SO_AUDIT_DIR"
+
+          mapfile -t SO_ENTRIES < <(
+            unzip -Z1 "$APK" | grep -E '^lib/[^/]+/[^/]+\.so$'
+          )
+          test "${#SO_ENTRIES[@]}" -gt 0
+
+          for ENTRY in "${SO_ENTRIES[@]}"; do
+            SAFE_NAME="$(printf '%s' "$ENTRY" | tr '/.' '__')"
+            SO_FILE="$SO_AUDIT_DIR/$SAFE_NAME"
+            unzip -p "$APK" "$ENTRY" > "$SO_FILE"
+
+            if ! "$NDK_READELF" -lW "$SO_FILE" |
+              awk '/LOAD/ { if ($NF != "0x4000") bad=1; count++ }
+                   END { if (count == 0 || bad) exit 1 }'
+            then
+              echo "ERROR: ELF LOAD alignment bukan 16 KB: $ENTRY"
+              exit 1
+            fi
+
+            echo "PASS: $ENTRY"
+          done
+
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          test -x "$APKSIGNER"
+
+          SIGNER_FP="$("$APKSIGNER" verify --print-certs "$APK" |
+            awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {
+              print toupper($2); exit
+            }' | tr -d ':')"
+
+          EXPECTED_FP="48E685FAC5DDDC0979D688972B916DA8A3AD4DA603470332E44321C96241BFDB"
+
+          if [ "$SIGNER_FP" != "$EXPECTED_FP" ]; then
+            echo "ERROR: APK signer fingerprint mismatch."
+            exit 1
+          fi
+
+          echo "APK signer fingerprint verified: $SIGNER_FP"
 
           mkdir -p artifacts
           cp "$APK" artifacts/app-online-debug.apk

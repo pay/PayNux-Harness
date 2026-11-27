@@ -438,6 +438,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
     @Volatile private var projectTerminalProcess: Process? = null
     @Volatile private var terminalProcess: Process? = null
+    private val paynuxTerminalLazy = lazy { PaynuxTerminalController(getApplication(), installer) { _state.value.projects.map { it.slug to it.id } } }
+    val paynuxTerminal: PaynuxTerminalController get() = paynuxTerminalLazy.value
     @Volatile private var projectTerminalProjectId: String? = null
     @Volatile private var projectTerminalStopRequested: Boolean = false
     @Volatile private var androidBuildProcess: Process? = null
@@ -496,8 +498,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             ),
             antigravityModel = preferences.antigravityModel,
             antigravityEffort = preferences.antigravityEffort,
-            themeMode = runCatching { com.jarves.mh.ui.theme.AppThemeMode.valueOf(preferences.themeMode.uppercase()) }
-                .getOrDefault(com.jarves.mh.ui.theme.AppThemeMode.DARK),
+            themeMode = com.jarves.mh.ui.theme.AppThemeMode.DARK, // PayNux Harness is dark-only
             languageCode = preferences.languageCode,
             projects = preferences.loadProjects(),
             githubAuthStatus = GitHubAuthStatus.DISCONNECTED,
@@ -2005,8 +2006,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setThemeMode(mode: com.jarves.mh.ui.theme.AppThemeMode) {
-        preferences.themeMode = mode.name.lowercase()
-        _state.update { it.copy(themeMode = mode) }
+        // PayNux Harness is dark-only; any requested mode resolves to DARK.
+        preferences.themeMode = com.jarves.mh.ui.theme.AppThemeMode.DARK.name.lowercase()
+        _state.update { it.copy(themeMode = com.jarves.mh.ui.theme.AppThemeMode.DARK) }
     }
 
     fun setLanguage(code: String) {
@@ -5403,6 +5405,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     override fun onCleared() {
+        if (paynuxTerminalLazy.isInitialized()) paynuxTerminalLazy.value.shutdown()
         stopAndroidLogcat()
         super.onCleared()
     }
