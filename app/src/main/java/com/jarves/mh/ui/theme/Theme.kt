@@ -11,19 +11,25 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-val PocketOrange = Color(0xFFF28C52)
+/** PayNux red-orange accent (the app's primary colour). */
+val PocketOrange = Color(0xFFF26A38)
+val PayNuxRed = Color(0xFFDC2626)
+val PayNuxOrange = Color(0xFFF48A4F)
+
+/** PayNux Harness is dark-only: the day/night switch is hidden and the theme is always dark. */
+const val THEME_SWITCH_ENABLED = false
 val PocketBlue = Color(0xFF8EA8FF)
 val PocketGreen = Color(0xFF69D69E)
-val PocketBackground = Color(0xFF0B0E14)
+val PocketBackground = Color(0xFF0B0F14)
 val PocketSurface = Color(0xFF131821)
 val PocketSurfaceVariant = Color(0xFF1B222D)
 val PocketOutline = Color(0xFF2A3240)
 
 private val DarkColors = darkColorScheme(
     primary = PocketOrange,
-    onPrimary = Color(0xFF241107),
-    primaryContainer = Color(0xFF42281D),
-    onPrimaryContainer = Color(0xFFFFDDCC),
+    onPrimary = Color(0xFF240A05),
+    primaryContainer = Color(0xFF3A1814),
+    onPrimaryContainer = Color(0xFFFFDAD1),
     secondary = PocketBlue,
     onSecondary = Color(0xFF001F58),
     tertiary = PocketGreen,
@@ -61,11 +67,7 @@ enum class AppThemeMode { SYSTEM, DARK, LIGHT }
 
 @Composable
 fun PocketTheme(themeMode: AppThemeMode = AppThemeMode.SYSTEM, content: @Composable () -> Unit) {
-    val isDark = when (themeMode) {
-        AppThemeMode.DARK -> true
-        AppThemeMode.LIGHT -> false
-        AppThemeMode.SYSTEM -> isSystemInDarkTheme()
-    }
+    val isDark = true // PayNux Harness is dark-only (themeMode is kept for compatibility)
 
     val view = LocalView.current
     if (!view.isInEditMode) {

@@ -286,7 +286,7 @@ class BackupService : Service() {
     private fun acquireWakeLock() {
         if (wakeLock?.isHeld == true) return
         wakeLock = getSystemService(PowerManager::class.java)
-            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "com.jarves.mh:backup")
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "com.paynux.harness:backup")
             .apply { acquire(MAX_WAKE_LOCK_MS) }
     }
 
@@ -306,8 +306,8 @@ class BackupService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
-        const val ACTION_START = "com.jarves.mh.START_BACKUP"
-        const val ACTION_STOP = "com.jarves.mh.STOP_BACKUP"
+        const val ACTION_START = "com.paynux.harness.START_BACKUP"
+        const val ACTION_STOP = "com.paynux.harness.STOP_BACKUP"
         const val EXTRA_OPERATION = "operation"
         const val EXTRA_INCLUDE_SETTINGS = "include_settings"
         private const val CHANNEL_ID = "backup"

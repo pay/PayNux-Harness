@@ -250,7 +250,7 @@ fun TerminalScreen(
                             Icon(Icons.Default.DeleteOutline, contentDescription = stringResource(R.string.ws_terminal_clear_output), modifier = Modifier.size(20.dp))
                         }
                         if (showThemeAction) {
-                            IconButton(onClick = onToggleTheme) {
+                            if (com.jarves.mh.ui.theme.THEME_SWITCH_ENABLED) IconButton(onClick = onToggleTheme) {
                                 Icon(
                                     if (themeMode == AppThemeMode.DARK) Icons.Default.LightMode else Icons.Default.DarkMode,
                                     contentDescription = stringResource(R.string.theme_toggle),
@@ -307,7 +307,7 @@ fun TerminalScreen(
                             Icon(Icons.Default.DeleteOutline, contentDescription = stringResource(R.string.ws_terminal_clear_output))
                         }
                         if (showThemeAction) {
-                            IconButton(onClick = onToggleTheme) {
+                            if (com.jarves.mh.ui.theme.THEME_SWITCH_ENABLED) IconButton(onClick = onToggleTheme) {
                                 Icon(
                                     if (themeMode == AppThemeMode.DARK) Icons.Default.LightMode else Icons.Default.DarkMode,
                                     contentDescription = stringResource(R.string.theme_toggle),

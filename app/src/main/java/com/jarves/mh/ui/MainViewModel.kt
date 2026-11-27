@@ -498,8 +498,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             ),
             antigravityModel = preferences.antigravityModel,
             antigravityEffort = preferences.antigravityEffort,
-            themeMode = runCatching { com.jarves.mh.ui.theme.AppThemeMode.valueOf(preferences.themeMode.uppercase()) }
-                .getOrDefault(com.jarves.mh.ui.theme.AppThemeMode.DARK),
+            themeMode = com.jarves.mh.ui.theme.AppThemeMode.DARK, // PayNux Harness is dark-only
             languageCode = preferences.languageCode,
             projects = preferences.loadProjects(),
             githubAuthStatus = GitHubAuthStatus.DISCONNECTED,
@@ -2007,8 +2006,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setThemeMode(mode: com.jarves.mh.ui.theme.AppThemeMode) {
-        preferences.themeMode = mode.name.lowercase()
-        _state.update { it.copy(themeMode = mode) }
+        // PayNux Harness is dark-only; any requested mode resolves to DARK.
+        preferences.themeMode = com.jarves.mh.ui.theme.AppThemeMode.DARK.name.lowercase()
+        _state.update { it.copy(themeMode = com.jarves.mh.ui.theme.AppThemeMode.DARK) }
     }
 
     fun setLanguage(code: String) {

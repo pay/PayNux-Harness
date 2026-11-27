@@ -277,6 +277,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
 import com.jarves.mh.R
 import com.jarves.mh.ui.theme.AppLanguage
 import com.jarves.mh.ui.theme.AppThemeMode
@@ -510,7 +512,7 @@ private fun AntigravityOnboardingScreen(
                 title = { Text(stringResource(R.string.ws_agy_setup_title)) },
                 actions = {
                     LanguagePickerAction(currentLanguageCode, onSetLanguage)
-                    IconButton(onClick = onToggleTheme) { Icon(Icons.Default.DarkMode, stringResource(R.string.theme_toggle)) }
+                    if (com.jarves.mh.ui.theme.THEME_SWITCH_ENABLED) IconButton(onClick = onToggleTheme) { Icon(Icons.Default.DarkMode, stringResource(R.string.theme_toggle)) }
                 },
             )
         },
@@ -608,11 +610,11 @@ private fun InitialLanguageSetupScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         BrandMark(compact = true)
                         Spacer(Modifier.width(9.dp))
-                        Text("Mobile Harness", fontWeight = FontWeight.Bold)
+                        Text("PayNux Harness", fontWeight = FontWeight.Bold)
                     }
                 },
                 actions = {
-                    IconButton(onClick = onToggleTheme) {
+                    if (com.jarves.mh.ui.theme.THEME_SWITCH_ENABLED) IconButton(onClick = onToggleTheme) {
                         Icon(
                             if (themeMode == AppThemeMode.DARK) Icons.Default.LightMode else Icons.Default.DarkMode,
                             contentDescription = stringResource(R.string.theme_toggle),
@@ -900,12 +902,12 @@ private fun BackgroundTaskSetupScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         BrandMark(compact = true)
                         Spacer(Modifier.width(9.dp))
-                        Text("Mobile Harness", fontWeight = FontWeight.Bold)
+                        Text("PayNux Harness", fontWeight = FontWeight.Bold)
                     }
                 },
                 actions = {
                     LanguagePickerAction(currentLanguageCode, onSetLanguage)
-                    IconButton(onClick = onToggleTheme) {
+                    if (com.jarves.mh.ui.theme.THEME_SWITCH_ENABLED) IconButton(onClick = onToggleTheme) {
                         Icon(
                             if (themeMode == AppThemeMode.DARK) Icons.Default.LightMode else Icons.Default.DarkMode,
                             contentDescription = stringResource(R.string.theme_toggle),
@@ -1176,7 +1178,7 @@ private fun RuntimeSetupPromptScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         BrandMark(compact = true)
                         Spacer(Modifier.width(9.dp))
-                        Text("Mobile Harness", fontWeight = FontWeight.Bold)
+                        Text("PayNux Harness", fontWeight = FontWeight.Bold)
                     }
                 },
                 navigationIcon = {
@@ -1188,7 +1190,7 @@ private fun RuntimeSetupPromptScreen(
                 },
                 actions = {
                     LanguagePickerAction(currentLanguageCode, onSetLanguage)
-                    IconButton(onClick = onToggleTheme) {
+                    if (com.jarves.mh.ui.theme.THEME_SWITCH_ENABLED) IconButton(onClick = onToggleTheme) {
                         Icon(
                             if (themeMode == AppThemeMode.DARK) Icons.Default.LightMode else Icons.Default.DarkMode,
                             contentDescription = stringResource(R.string.theme_toggle),
@@ -1890,7 +1892,8 @@ private fun localizeRuntimeMessage(message: String): String {
         trimmed.equals("Setup complete", ignoreCase = true) -> {
             stringResource(R.string.runtime_msg_setup_complete)
         }
-        trimmed.contains("Resuming Mobile Harness setup", ignoreCase = true) -> {
+        trimmed.contains("Resuming PayNux Harness setup", ignoreCase = true) ||
+            trimmed.contains("Resuming Mobile Harness setup", ignoreCase = true) -> {
             stringResource(R.string.runtime_msg_resuming_setup)
         }
         trimmed.startsWith("Downloading ") && !trimmed.startsWith("Downloading: ") -> {
@@ -1930,7 +1933,7 @@ private fun RuntimeInstallationScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onToggleTheme) {
+                    if (com.jarves.mh.ui.theme.THEME_SWITCH_ENABLED) IconButton(onClick = onToggleTheme) {
                         Icon(
                             if (themeMode == AppThemeMode.DARK) Icons.Default.LightMode else Icons.Default.DarkMode,
                             contentDescription = stringResource(R.string.theme_toggle),
@@ -2395,11 +2398,11 @@ private fun StartupErrorScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         BrandMark(compact = true)
                         Spacer(Modifier.width(9.dp))
-                        Text("Mobile Harness", fontWeight = FontWeight.Bold)
+                        Text("PayNux Harness", fontWeight = FontWeight.Bold)
                     }
                 },
                 actions = {
-                    IconButton(onClick = onToggleTheme) {
+                    if (com.jarves.mh.ui.theme.THEME_SWITCH_ENABLED) IconButton(onClick = onToggleTheme) {
                         Icon(
                             if (themeMode == AppThemeMode.DARK) Icons.Default.LightMode else Icons.Default.DarkMode,
                             contentDescription = stringResource(R.string.theme_toggle),
@@ -2685,7 +2688,7 @@ private fun ProviderSetupScreen(
                         )
                     }
                     if (onToggleTheme != null) {
-                        IconButton(onClick = onToggleTheme) {
+                        if (com.jarves.mh.ui.theme.THEME_SWITCH_ENABLED) IconButton(onClick = onToggleTheme) {
                             Icon(
                                 if (themeMode == AppThemeMode.DARK) Icons.Default.LightMode else Icons.Default.DarkMode,
                                 contentDescription = stringResource(R.string.theme_toggle),
@@ -3534,7 +3537,7 @@ private fun ProjectsScreen(
         topBar = {
             TopAppBar(
                 modifier = Modifier.padding(top = 8.dp),
-                title = { Row(verticalAlignment = Alignment.CenterVertically) { BrandMark(compact = true); Spacer(Modifier.width(9.dp)); Text("Mobile Harness", fontWeight = FontWeight.Bold) } },
+                title = { Row(verticalAlignment = Alignment.CenterVertically) { BrandMark(compact = true); Spacer(Modifier.width(9.dp)); Text("PayNux Harness", fontWeight = FontWeight.Bold) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
@@ -3700,7 +3703,7 @@ private fun ProjectsScreen(
                             }
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
-                                Text("Mobile Harness ${update.versionName}", fontWeight = FontWeight.Bold)
+                                Text("PayNux Harness ${update.versionName}", fontWeight = FontWeight.Bold)
                                 Text(stringResource(R.string.ws_update_ready), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Text(stringResource(R.string.ws_update), color = PocketOrange, fontWeight = FontWeight.Bold, fontSize = 13.sp)
@@ -7356,30 +7359,10 @@ private fun EmptyState(icon: ImageVector, title: String, body: String) {
 
 @Composable
 private fun BrandMark(modifier: Modifier = Modifier, compact: Boolean = false) {
-    val size = if (compact) 32.dp else 50.dp
-    val iconSize = if (compact) 17.dp else 24.dp
-    val cornerRadius = if (compact) 9.dp else 14.dp
-    val primary = MaterialTheme.colorScheme.primary
-
-    Box(
-        modifier = modifier
-            .size(size)
-            .background(
-                color = primary.copy(alpha = 0.12f),
-                shape = RoundedCornerShape(cornerRadius),
-            )
-            .border(
-                width = 1.dp,
-                color = primary.copy(alpha = 0.32f),
-                shape = RoundedCornerShape(cornerRadius),
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = Icons.Default.Terminal,
-            contentDescription = "Mobile Harness",
-            modifier = Modifier.size(iconSize),
-            tint = primary,
-        )
-    }
+    val size = if (compact) 34.dp else 54.dp
+    Image(
+        painter = painterResource(R.drawable.paynux_mark),
+        contentDescription = "PayNux Harness",
+        modifier = modifier.size(size),
+    )
 }
